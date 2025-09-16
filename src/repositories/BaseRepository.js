@@ -27,55 +27,7 @@ class BaseRepository {
      */
     async findById(tableName, id) {
         const query = `SELECT * FROM ${tableName} WHERE id = $1`;
-        const result = await this.query(query, params);
-        return parseInt(result.rows[0].count);
-    }
-
-    /**
-     * Execute a paginated query
-     */
-    async paginate(tableName, { page = 1, limit = 10, conditions = {}, orderBy = 'created_at DESC' }) {
-        const offset = (page - 1) * limit;
-        
-        // Get total count
-        const totalCount = await this.count(tableName, conditions);
-        
-        // Get paginated results
-        let query = `SELECT * FROM ${tableName}`;
-        const params = [];
-        let paramCount = 1;
-
-        // Add WHERE conditions
-        if (Object.keys(conditions).length > 0) {
-            const whereClause = Object.keys(conditions).map(key => {
-                params.push(conditions[key]);
-                return `${key} = ${paramCount++}`;
-            }).join(' AND ');
-            
-            query += ` WHERE ${whereClause}`;
-        }
-
-        // Add ORDER BY, LIMIT, OFFSET
-        query += ` ORDER BY ${orderBy} LIMIT ${paramCount} OFFSET ${paramCount + 1}`;
-        params.push(limit, offset);
-
-        const result = await this.query(query, params);
-        
-        return {
-            data: result.rows,
-            pagination: {
-                page,
-                limit,
-                total: totalCount,
-                totalPages: Math.ceil(totalCount / limit),
-                hasNextPage: page * limit < totalCount,
-                hasPrevPage: page > 1
-            }
-        };
-    }
-}
-
-module.exports = BaseRepository;(query, [id]);
+        const result = await this.query(query, [id]);
         return result.rows[0] || null;
     }
 
@@ -200,4 +152,52 @@ module.exports = BaseRepository;(query, [id]);
             query += ` WHERE ${whereClause}`;
         }
 
-        const result = await this.query
+        const result = await this.query(query, params);
+        return parseInt(result.rows[0].count);
+    }
+
+    /**
+     * Execute a paginated query
+     */
+    async paginate(tableName, { page = 1, limit = 10, conditions = {}, orderBy = 'created_at DESC' }) {
+        const offset = (page - 1) * limit;
+        
+        // Get total count
+        const totalCount = await this.count(tableName, conditions);
+        
+        // Get paginated results
+        let query = `SELECT * FROM ${tableName}`;
+        const params = [];
+        let paramCount = 1;
+
+        // Add WHERE conditions
+        if (Object.keys(conditions).length > 0) {
+            const whereClause = Object.keys(conditions).map(key => {
+                params.push(conditions[key]);
+                return `${key} = $${paramCount++}`;
+            }).join(' AND ');
+            
+            query += ` WHERE ${whereClause}`;
+        }
+
+        // Add ORDER BY, LIMIT, OFFSET
+        query += ` ORDER BY ${orderBy} LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+        params.push(limit, offset);
+
+        const result = await this.query(query, params);
+        
+        return {
+            data: result.rows,
+            pagination: {
+                page,
+                limit,
+                total: totalCount,
+                totalPages: Math.ceil(totalCount / limit),
+                hasNextPage: page * limit < totalCount,
+                hasPrevPage: page > 1
+            }
+        };
+    }
+}
+
+module.exports = BaseRepository;
