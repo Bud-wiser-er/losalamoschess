@@ -1,4 +1,4 @@
-const RulesEngine = require('./index');
+const RulesEngine = require('../src/engine/index');
 // AI Bot will be implemented later
 // const AIBot = require('./ai-bot');
 
