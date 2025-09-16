@@ -1,0 +1,57 @@
+{
+  "name": "los-alamos-chess-backend",
+  "version": "1.0.0",
+  "description": "Los Alamos Chess Platform - Backend Game Logic",
+  "main": "index.js",
+  "scripts": {
+    "start": "node main_entry_index.js",
+    "dev": "nodemon main_entry_index.js",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "validate": "node -c index.js && node -c piece-movement.js && node -c board-validator.js && node -c game-state-checker.js",
+    "demo": "node main_entry_index.js"
+  },
+  "keywords": [
+    "chess",
+    "los-alamos",
+    "game-engine",
+    "ai",
+    "board-game"
+  ],
+  "author": "Byron Norval",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3"
+  },
+  "devDependencies": {
+    "jest": "^29.5.0",
+    "nodemon": "^3.0.1",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.3.1"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverage": true,
+    "coverageDirectory": "coverage",
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
+    "testMatch": [
+      "**/test/**/*.test.js",
+      "**/__tests__/**/*.js"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/test/"
+    ]
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}
