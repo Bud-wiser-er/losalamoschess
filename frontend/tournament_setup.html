@@ -1,0 +1,943 @@
+<script type = "module">
+    import './common/api.js';
+    import './common/ui.js';
+    import './common/websocket.js';
+</script>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Los Alamos Chess - Create Tournament</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+
+        .nav-menu a {
+            color: #555;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-menu a:hover, .nav-menu a.active {
+            color: #667eea;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+
+        .user-profile:hover {
+            background: #f0f2f5;
+        }
+
+        .user-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        /* Page Header */
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px;
+            padding: 40px;
+            color: white;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+
+        .page-title {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        /* Form Layout */
+        .form-layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 30px;
+        }
+
+        /* Form Sections */
+        .form-column {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .form-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        }
+
+        .section-title {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f0f2f5;
+            font-weight: 600;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .required {
+            color: #ef4444;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        .help-text {
+            font-size: 13px;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        /* Two Column Grid */
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* Format Cards */
+        .format-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .format-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            background: white;
+        }
+
+        .format-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .format-card.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        }
+
+        .format-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .format-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .format-desc {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Time Presets */
+        .time-presets {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .preset-btn {
+            padding: 8px 16px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .preset-btn:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .preset-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Prize Rows */
+        .prize-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .prize-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .prize-position {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .prize-input {
+            flex: 1;
+        }
+
+        .add-prize-btn {
+            width: 100%;
+            padding: 12px;
+            border: 2px dashed #667eea;
+            background: transparent;
+            border-radius: 8px;
+            color: #667eea;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .add-prize-btn:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        /* Checkbox List */
+        .checkbox-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-item label {
+            cursor: pointer;
+            color: #555;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .sidebar-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .preview-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f2f5;
+        }
+
+        .preview-item:last-child {
+            border-bottom: none;
+        }
+
+        .preview-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .preview-value {
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-draft {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-live {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        /* Tips */
+        .tip-item {
+            padding: 10px 0;
+            color: #666;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .tip-icon {
+            color: #667eea;
+            margin-top: 2px;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 14px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #999;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-ghost:hover {
+            border-color: #999;
+            background: #f8f9fa;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .form-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .format-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu {
+                display: none;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <svg class="logo-icon" viewBox="0 0 100 100">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M50 10 L30 30 L30 50 L20 90 L80 90 L70 50 L70 30 Z" fill="url(#gradient)"/>
+                    <rect x="30" y="30" width="40" height="5" fill="url(#gradient)"/>
+                    <circle cx="50" cy="15" r="5" fill="url(#gradient)"/>
+                </svg>
+                <span class="logo-text">Los Alamos Chess</span>
+            </div>
+            
+            <nav>
+                <ul class="nav-menu">
+                    <li><a href="#play">Play</a></li>
+                    <li><a href="#tournaments" class="active">Tournaments</a></li>
+                    <li><a href="#learn">Learn</a></li>
+                    <li><a href="#social">Friends</a></li>
+                    <li><a href="#stats">Statistics</a></li>
+                </ul>
+            </nav>
+            
+            <div class="user-section">
+                <div class="user-profile">
+                    <div class="user-avatar">JD</div>
+                    <span>John Doe</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">🏆 Create New Tournament</h1>
+            <p class="page-subtitle">Set up and customize your Los Alamos Chess tournament</p>
+        </div>
+
+        <!-- Form Layout -->
+        <div class="form-layout">
+            <!-- Main Form Column -->
+            <div class="form-column">
+                <!-- Basic Information -->
+                <section class="form-section">
+                    <h2 class="section-title">📝 Basic Information</h2>
+                    
+                    <div class="form-group">
+                        <label class="form-label">
+                            Tournament Name <span class="required">*</span>
+                        </label>
+                        <input type="text" class="form-input" placeholder="e.g., Weekly Blitz Championship" id="tournament-name">
+                        <p class="help-text">Choose a memorable name for your tournament</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-textarea" placeholder="Describe your tournament, rules, and any special instructions..."></textarea>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">
+                                Start Date <span class="required">*</span>
+                            </label>
+                            <input type="date" class="form-input" id="start-date">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Start Time <span class="required">*</span>
+                            </label>
+                            <input type="time" class="form-input" id="start-time" value="19:00">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">
+                                Registration Deadline <span class="required">*</span>
+                            </label>
+                            <input type="date" class="form-input" id="reg-date">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Deadline Time <span class="required">*</span>
+                            </label>
+                            <input type="time" class="form-input" id="reg-time" value="18:00">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tournament Format -->
+                <section class="form-section">
+                    <h2 class="section-title">⚔️ Tournament Format</h2>
+                    
+                    <div class="format-cards">
+                        <div class="format-card selected" onclick="selectFormat(this, 'swiss')">
+                            <div class="format-icon">🔄</div>
+                            <div class="format-name">Swiss</div>
+                            <div class="format-desc">Players compete in multiple rounds</div>
+                        </div>
+                        <div class="format-card" onclick="selectFormat(this, 'knockout')">
+                            <div class="format-icon">🏆</div>
+                            <div class="format-name">Knockout</div>
+                            <div class="format-desc">Single elimination</div>
+                        </div>
+                        <div class="format-card" onclick="selectFormat(this, 'round-robin')">
+                            <div class="format-icon">🔁</div>
+                            <div class="format-name">Round Robin</div>
+                            <div class="format-desc">Everyone plays everyone</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Number of Rounds</label>
+                            <input type="number" class="form-input" value="5" min="1" max="20" id="num-rounds">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Pairing System</label>
+                            <select class="form-select">
+                                <option>Swiss (Dutch)</option>
+                                <option>Swiss (Accelerated)</option>
+                                <option>Random</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Time Control -->
+                <section class="form-section">
+                    <h2 class="section-title">⏱️ Time Control</h2>
+                    
+                    <div class="time-presets">
+                        <button class="preset-btn" onclick="setTimePreset(this, 1, 0)">Bullet (1+0)</button>
+                        <button class="preset-btn" onclick="setTimePreset(this, 3, 2)">Blitz (3+2)</button>
+                        <button class="preset-btn active" onclick="setTimePreset(this, 5, 0)">Rapid (5+0)</button>
+                        <button class="preset-btn" onclick="setTimePreset(this, 10, 5)">Rapid (10+5)</button>
+                        <button class="preset-btn" onclick="setTimePreset(this, 15, 10)">Classical</button>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Initial Time (minutes)</label>
+                            <input type="number" class="form-input" value="5" min="1" max="180" id="initial-time">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Increment (seconds)</label>
+                            <input type="number" class="form-input" value="0" min="0" max="60" id="increment">
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Registration Settings -->
+                <section class="form-section">
+                    <h2 class="section-title">👥 Registration Settings</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Minimum Players</label>
+                            <input type="number" class="form-input" value="4" min="2" id="min-players">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Maximum Players</label>
+                            <input type="number" class="form-input" value="32" min="2" max="256" id="max-players">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Entry Fee (Points)</label>
+                            <input type="number" class="form-input" placeholder="0" min="0" id="entry-fee">
+                            <p class="help-text">Leave as 0 for free entry</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Rating Range</label>
+                            <select class="form-select">
+                                <option>All Ratings</option>
+                                <option>Under 1200</option>
+                                <option>1200-1600</option>
+                                <option>1600-2000</option>
+                                <option>Above 2000</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Requirements</label>
+                        <div class="checkbox-list">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="req-email" checked>
+                                <label for="req-email">Verified email required</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="req-rating">
+                                <label for="req-rating">Minimum 10 rated games</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="req-approval">
+                                <label for="req-approval">Manual approval required</label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Prizes -->
+                <section class="form-section">
+                    <h2 class="section-title">🎁 Prizes & Rewards</h2>
+                    
+                    <div class="prize-list">
+                        <div class="prize-row">
+                            <span class="prize-position">1st</span>
+                            <input type="text" class="form-input prize-input" placeholder="e.g., 500 points + Trophy">
+                        </div>
+                        <div class="prize-row">
+                            <span class="prize-position">2nd</span>
+                            <input type="text" class="form-input prize-input" placeholder="e.g., 300 points">
+                        </div>
+                        <div class="prize-row">
+                            <span class="prize-position">3rd</span>
+                            <input type="text" class="form-input prize-input" placeholder="e.g., 100 points">
+                        </div>
+                    </div>
+                    
+                    <button class="add-prize-btn" onclick="addPrize()">+ Add More Prizes</button>
+                </section>
+
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="createTournament()">
+                        Create Tournament
+                    </button>
+                    <button class="btn btn-secondary" onclick="saveDraft()">
+                        Save as Draft
+                    </button>
+                    <button class="btn btn-ghost" onclick="cancel()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <!-- Preview Card -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">📋 Tournament Preview</h3>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Status</span>
+                        <span class="preview-value">
+                            <span class="status-badge status-draft">Draft</span>
+                        </span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Format</span>
+                        <span class="preview-value" id="preview-format">Swiss</span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Time Control</span>
+                        <span class="preview-value" id="preview-time">5+0</span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Rounds</span>
+                        <span class="preview-value" id="preview-rounds">5</span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Players</span>
+                        <span class="preview-value" id="preview-players">4-32</span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Entry Fee</span>
+                        <span class="preview-value" id="preview-fee">Free</span>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="sidebar-card">
+                    <h3 class="sidebar-title">📊 Quick Stats</h3>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Est. Duration</span>
+                        <span class="preview-value">2-3 hours</span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Max Games/Player</span>
+                        <span class="preview-value">5 games</span>
+                    </div>
+                    
+                    <div class="preview-item">
+                        <span class="preview-label">Total Games</span>
+                        <span class="preview-value">~80 games</span>
+                    </div>
+                </div>
+
+                <!-- Tips -->
+                
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        let selectedFormat = 'swiss';
+
+        function selectFormat(element, format) {
+            document.querySelectorAll('.format-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            selectedFormat = format;
+            
+            document.getElementById('preview-format').textContent = 
+                format.charAt(0).toUpperCase() + format.slice(1).replace('-', ' ');
+            
+            if (format === 'knockout') {
+                document.getElementById('num-rounds').value = '4';
+                document.getElementById('preview-rounds').textContent = 'Single Elim';
+            } else if (format === 'round-robin') {
+                document.getElementById('preview-rounds').textContent = 'All vs All';
+            } else {
+                document.getElementById('preview-rounds').textContent = document.getElementById('num-rounds').value;
+            }
+        }
+
+        function setTimePreset(button, minutes, increment) {
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            button.classList.add('active');
+            
+            document.getElementById('initial-time').value = minutes;
+            document.getElementById('increment').value = increment;
+            document.getElementById('preview-time').textContent = `${minutes}+${increment}`;
+        }
+
+        function createTournament() {
+            const name = document.getElementById('tournament-name').value;
+            if (!name.trim()) {
+                alert('Please enter a tournament name');
+                return;
+            }
+            
+            alert(`Tournament "${name}" created successfully!`);
+            document.querySelector('.status-badge').classList.replace('status-draft', 'status-live');
+            document.querySelector('.status-badge').textContent = 'Live';
+        }
+
+        function saveDraft() {
+            alert('Tournament saved as draft');
+        }
+
+        function cancel() {
+            if (confirm('Discard changes and return to tournaments?')) {
+                window.location.href = '#tournaments';
+            }
+        }
+
+        function addPrize() {
+            alert('Additional prize position would be added here');
+        }
+
+        // Update preview when inputs change
+        document.getElementById('num-rounds').addEventListener('input', function(e) {
+            if (selectedFormat === 'swiss') {
+                document.getElementById('preview-rounds').textContent = e.target.value;
+            }
+        });
+
+        document.getElementById('min-players').addEventListener('input', updatePlayersPreview);
+        document.getElementById('max-players').addEventListener('input', updatePlayersPreview);
+
+        function updatePlayersPreview() {
+            const min = document.getElementById('min-players').value;
+            const max = document.getElementById('max-players').value;
+            document.getElementById('preview-players').textContent = `${min}-${max}`;
+        }
+
+        document.getElementById('entry-fee').addEventListener('input', function(e) {
+            const fee = parseInt(e.target.value) || 0;
+            document.getElementById('preview-fee').textContent = fee > 0 ? `${fee} points` : 'Free';
+        });
+
+        document.getElementById('initial-time').addEventListener('input', updateTimePreview);
+        document.getElementById('increment').addEventListener('input', updateTimePreview);
+
+        function updateTimePreview() {
+            const time = document.getElementById('initial-time').value;
+            const increment = document.getElementById('increment').value;
+            document.getElementById('preview-time').textContent = `${time}+${increment}`;
+        }
+
+        // Set default dates on load
+        window.addEventListener('load', function() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            
+            const dateStr = tomorrow.toISOString().split('T')[0];
+            document.getElementById('start-date').value = dateStr;
+            document.getElementById('reg-date').value = dateStr;
+        });
+    </script>
+</body>
+</html>
