@@ -8,7 +8,7 @@ class RulesEngine {
         this.pieceMovement = new PieceMovement();
         this.boardValidator = new BoardValidator();
         this.gameStateChecker = new GameStateChecker();
-        this.positionHistory = []; // Track positions for threefold repetition
+        this.positionHistory = [];
     }
 
     /**
@@ -18,6 +18,23 @@ class RulesEngine {
      * @returns {Object} Validation result with detailed information
      */
     validateMove(fen, uci) {
+        // Add input validation
+        if (!fen || typeof fen !== 'string') {
+            return {
+                valid: false,
+                error: 'INVALID_FEN',
+                details: 'FEN must be a non-empty string'
+            };
+        }
+        
+        if (!uci || typeof uci !== 'string') {
+            return {
+                valid: false,
+                error: 'INVALID_UCI',
+                details: 'UCI must be a non-empty string'
+            };
+        }
+
         // Step 1: Parse FEN
         const board = this.parseFEN(fen);
         if (!board) {
@@ -114,7 +131,7 @@ class RulesEngine {
             };
         }
 
-        // Move is valid!
+        // Move is valid papi!
         return {
             valid: true,
             flags: {
@@ -155,7 +172,7 @@ class RulesEngine {
 
         return {
             fen: this.generateFEN(board),
-            status: status.type, // 'ONGOING', 'CHECKMATE', 'STALEMATE', 'DRAW'
+            status: status.type,
             flags: {
                 check: status.isCheck,
                 checkmate: status.type === 'CHECKMATE',
@@ -174,6 +191,8 @@ class RulesEngine {
      */
     getLegalMoves(fen) {
         const board = this.parseFEN(fen);
+        if (!board) return [];
+        
         const legalMoves = [];
 
         // Iterate through all squares
@@ -214,15 +233,25 @@ class RulesEngine {
      * @returns {Object} Board object with piece positions and metadata
      */
     parseFEN(fen) {
+        // Add null/undefined/type checks
+        if (!fen || typeof fen !== 'string') {
+            return null;
+        }
+        
         const parts = fen.split(' ');
         if (parts.length !== 6) return null;
 
         const position = parts[0];
         const turn = parts[1] === 'w' ? 'white' : 'black';
-        const castling = parts[2]; // Always '-' for Los Alamos
-        const enPassant = parts[3]; // Always '-' for Los Alamos
+        const castling = parts[2];
+        const enPassant = parts[3];
         const halfMoveClock = parseInt(parts[4]);
         const fullMoveNumber = parseInt(parts[5]);
+
+        // Validate numeric fields
+        if (isNaN(halfMoveClock) || isNaN(fullMoveNumber)) {
+            return null;
+        }
 
         const board = {
             squares: [],
@@ -233,12 +262,18 @@ class RulesEngine {
             fullMoveNumber
         };
 
-        const ranks = position.split('/').reverse(); // Start from rank 1
-        ranks.forEach((rank, rankIndex) => {
+        const ranks = position.split('/');
+        if (ranks.length !== 6) return null;
+        
+        // FIX: Process ranks from bottom to top, passes unit test now form this fix
+        // FEN starts with rank 6 (black's back rank) and goes down to rank 1
+        for (let rankIndex = 0; rankIndex < 6; rankIndex++) {
+            // FEN rank 0 = board rank 5, FEN rank 5 = board rank 0
+            const rankString = ranks[5 - rankIndex];
             const row = [];
             let fileIndex = 0;
             
-            for (const char of rank) {
+            for (const char of rankString) {
                 if (isNaN(char)) {
                     // It's a piece
                     row.push({
@@ -250,17 +285,22 @@ class RulesEngine {
                 } else {
                     // Empty squares
                     const emptyCount = parseInt(char);
-                    for (let i = 0; i < emptyCount; i++) {
+                    for (let j = 0; j < emptyCount; j++) {
                         row.push(null);
                         fileIndex++;
                     }
                 }
             }
+            
+            // Validate row length
+            if (fileIndex !== 6) return null;
+            
             board.squares.push(row);
-        });
+        }
 
-        // Add helper methods
+        // helper methods
         board.getPieceAt = function(square) {
+            if (!square || typeof square !== 'string' || square.length !== 2) return null;
             const file = square.charCodeAt(0) - 97;
             const rank = parseInt(square[1]) - 1;
             if (rank < 0 || rank > 5 || file < 0 || file > 5) return null;
@@ -268,6 +308,7 @@ class RulesEngine {
         };
 
         board.setPieceAt = function(square, piece) {
+            if (!square || typeof square !== 'string' || square.length !== 2) return;
             const file = square.charCodeAt(0) - 97;
             const rank = parseInt(square[1]) - 1;
             if (rank < 0 || rank > 5 || file < 0 || file > 5) return;
@@ -275,7 +316,10 @@ class RulesEngine {
         };
 
         board.makeMove = function(move) {
+            if (!move || !move.from || !move.to) return;
             const piece = this.getPieceAt(move.from);
+            if (!piece) return;
+            
             this.setPieceAt(move.to, piece);
             this.setPieceAt(move.from, null);
             
@@ -284,7 +328,9 @@ class RulesEngine {
                 const promotedPiece = {
                     type: this.getPieceTypeFromNotation(move.promotion),
                     color: piece.color,
-                    notation: piece.color === 'white' ? move.promotion.toUpperCase() : move.promotion.toLowerCase()
+                    notation: piece.color === 'white' ? 
+                        move.promotion.toUpperCase() : 
+                        move.promotion.toLowerCase()
                 };
                 this.setPieceAt(move.to, promotedPiece);
             }
@@ -301,7 +347,7 @@ class RulesEngine {
                 halfMoveClock: this.halfMoveClock,
                 fullMoveNumber: this.fullMoveNumber
             };
-            // Re-add methods
+            // Re add methods
             cloned.getPieceAt = this.getPieceAt;
             cloned.setPieceAt = this.setPieceAt;
             cloned.makeMove = this.makeMove;
@@ -328,7 +374,7 @@ class RulesEngine {
     generateFEN(board) {
         let fen = '';
         
-        // Position
+        // Position - iterate from rank 6 down to rank 1
         for (let rank = 5; rank >= 0; rank--) {
             let emptyCount = 0;
             for (let file = 0; file < 6; file++) {
@@ -365,11 +411,12 @@ class RulesEngine {
      * @returns {Object} Cloned board
      */
     cloneBoard(board) {
+        if (!board || !board.clone) return null;
         return board.clone();
     }
 
     /**
-     * Checks the game status without recursion
+     * Checks the game status
      * @param {Object} board - Board state
      * @returns {Object} Status information
      */
@@ -390,15 +437,12 @@ class RulesEngine {
             return { type: 'DRAW', reason: 'FIFTY_MOVE', isCheck };
         }
 
-        // Check for threefold repetition would require position history
-        // Implementation would require tracking position history
-
         return { type: 'ONGOING', isCheck };
     }
 
     // Helper methods
     parseUCI(uci) {
-        if (!uci || uci.length < 4) return null;
+        if (!uci || typeof uci !== 'string' || uci.length < 4) return null;
         return {
             from: uci.substring(0, 2),
             to: uci.substring(2, 4),
@@ -415,13 +459,15 @@ class RulesEngine {
     }
 
     basicValidation(board, move) {
-        // Check square format
+        if (!move || !move.from || !move.to) return false;
         const squareRegex = /^[a-f][1-6]$/;
         return squareRegex.test(move.from) && squareRegex.test(move.to);
     }
 
     isCastlingAttempt(piece, move) {
         if (piece.type !== 'king') return false;
+        if (!move || !move.from || !move.to) return false;
+        
         const fileDiff = move.to.charCodeAt(0) - move.from.charCodeAt(0);
         return Math.abs(fileDiff) > 1;
     }
@@ -430,7 +476,7 @@ class RulesEngine {
         if (piece.type !== 'pawn') return false;
         const fileDiff = Math.abs(move.to.charCodeAt(0) - move.from.charCodeAt(0));
         const targetPiece = board.getPieceAt(move.to);
-        return fileDiff === 1 && !targetPiece; // Diagonal move to empty square
+        return fileDiff === 1 && !targetPiece;
     }
 
     isPromotionMove(piece, move) {
@@ -441,7 +487,7 @@ class RulesEngine {
     }
 
     isValidPromotion(promotion) {
-        if (!promotion) return true; // No promotion specified is fine
+        if (!promotion) return true;
         return ['q', 'r', 'n'].includes(promotion.toLowerCase());
     }
 

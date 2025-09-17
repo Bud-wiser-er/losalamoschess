@@ -17,6 +17,8 @@ class PieceMovement {
      * @returns {boolean} True if move is valid for this piece type
      */
     isValidMove(piece, move, board) {
+        if (!piece || !move || !board) return false;
+        
         const validator = this.pieceTypes[piece.type];
         if (!validator) return false;
         
@@ -24,24 +26,32 @@ class PieceMovement {
     }
 
     validatePawnMove(piece, move, board) {
+        if (!move || !move.from || !move.to || !board) return false;
+        
         const fromFile = move.from.charCodeAt(0) - 97;
         const fromRank = parseInt(move.from[1]) - 1;
         const toFile = move.to.charCodeAt(0) - 97;
         const toRank = parseInt(move.to[1]) - 1;
         
+        // Check bounds
+        if (fromFile < 0 || fromFile > 5 || fromRank < 0 || fromRank > 5 ||
+            toFile < 0 || toFile > 5 || toRank < 0 || toRank > 5) {
+            return false;
+        }
+        
         const direction = piece.color === 'white' ? 1 : -1;
         const rankDiff = toRank - fromRank;
         const fileDiff = Math.abs(toFile - fromFile);
         
-        const targetPiece = board.getPieceAt(move.to);
+        const targetPiece = board.getPieceAt ? board.getPieceAt(move.to) : null;
         
         // Forward move
         if (fileDiff === 0) {
-            // One square forward
+            // One square forward to empty square only
             if (rankDiff === direction && !targetPiece) {
                 return true;
             }
-            // NO double pawn move in Los Alamos (unlike regular chess)
+            // No double pawn moves in Los Alamos
             return false;
         }
         
@@ -55,13 +65,26 @@ class PieceMovement {
     }
 
     validateRookMove(piece, move, board) {
+        if (!move || !move.from || !move.to || !board) return false;
+        
         const fromFile = move.from.charCodeAt(0) - 97;
         const fromRank = parseInt(move.from[1]) - 1;
         const toFile = move.to.charCodeAt(0) - 97;
         const toRank = parseInt(move.to[1]) - 1;
         
+        // Check bounds
+        if (fromFile < 0 || fromFile > 5 || fromRank < 0 || fromRank > 5 ||
+            toFile < 0 || toFile > 5 || toRank < 0 || toRank > 5) {
+            return false;
+        }
+        
         // Must move in straight line (rank or file)
         if (fromFile !== toFile && fromRank !== toRank) {
+            return false;
+        }
+        
+        // Can't stay in same place
+        if (fromFile === toFile && fromRank === toRank) {
             return false;
         }
         
@@ -71,38 +94,60 @@ class PieceMovement {
         }
         
         // Check destination
-        const targetPiece = board.getPieceAt(move.to);
+        const targetPiece = board.getPieceAt ? board.getPieceAt(move.to) : null;
         return !targetPiece || targetPiece.color !== piece.color;
     }
 
     validateKnightMove(piece, move, board) {
+        if (!move || !move.from || !move.to || !board) return false;
+        
         const fromFile = move.from.charCodeAt(0) - 97;
         const fromRank = parseInt(move.from[1]) - 1;
         const toFile = move.to.charCodeAt(0) - 97;
         const toRank = parseInt(move.to[1]) - 1;
+        
+        // Check bounds
+        if (fromFile < 0 || fromFile > 5 || fromRank < 0 || fromRank > 5 ||
+            toFile < 0 || toFile > 5 || toRank < 0 || toRank > 5) {
+            return false;
+        }
         
         const fileDiff = Math.abs(toFile - fromFile);
         const rankDiff = Math.abs(toRank - fromRank);
         
         // Knight moves in L-shape: 2+1 or 1+2
-        const isLShape = (fileDiff === 2 && rankDiff === 1) || (fileDiff === 1 && rankDiff === 2);
+        const isLShape = (fileDiff === 2 && rankDiff === 1) || 
+                        (fileDiff === 1 && rankDiff === 2);
         if (!isLShape) return false;
         
         // Check destination
-        const targetPiece = board.getPieceAt(move.to);
+        const targetPiece = board.getPieceAt ? board.getPieceAt(move.to) : null;
         return !targetPiece || targetPiece.color !== piece.color;
     }
 
     validateQueenMove(piece, move, board) {
+        if (!move || !move.from || !move.to || !board) return false;
+        
         const fromFile = move.from.charCodeAt(0) - 97;
         const fromRank = parseInt(move.from[1]) - 1;
         const toFile = move.to.charCodeAt(0) - 97;
         const toRank = parseInt(move.to[1]) - 1;
         
+        // Check bounds
+        if (fromFile < 0 || fromFile > 5 || fromRank < 0 || fromRank > 5 ||
+            toFile < 0 || toFile > 5 || toRank < 0 || toRank > 5) {
+            return false;
+        }
+        
+        // Can't stay in same place
+        if (fromFile === toFile && fromRank === toRank) {
+            return false;
+        }
+        
         const fileDiff = Math.abs(toFile - fromFile);
         const rankDiff = Math.abs(toRank - fromRank);
         
-        // Queen moves either straight (like rook) or diagonally
+        // Queen moves either straight or diagonally
         const isStraight = (fromFile === toFile || fromRank === toRank);
         const isDiagonal = (fileDiff === rankDiff && fileDiff > 0);
         
@@ -116,15 +161,23 @@ class PieceMovement {
         }
         
         // Check destination
-        const targetPiece = board.getPieceAt(move.to);
+        const targetPiece = board.getPieceAt ? board.getPieceAt(move.to) : null;
         return !targetPiece || targetPiece.color !== piece.color;
     }
 
     validateKingMove(piece, move, board) {
+        if (!move || !move.from || !move.to || !board) return false;
+        
         const fromFile = move.from.charCodeAt(0) - 97;
         const fromRank = parseInt(move.from[1]) - 1;
         const toFile = move.to.charCodeAt(0) - 97;
         const toRank = parseInt(move.to[1]) - 1;
+        
+        // Check bounds
+        if (fromFile < 0 || fromFile > 5 || fromRank < 0 || fromRank > 5 ||
+            toFile < 0 || toFile > 5 || toRank < 0 || toRank > 5) {
+            return false;
+        }
         
         const fileDiff = Math.abs(toFile - fromFile);
         const rankDiff = Math.abs(toRank - fromRank);
@@ -140,7 +193,7 @@ class PieceMovement {
         }
         
         // Check destination
-        const targetPiece = board.getPieceAt(move.to);
+        const targetPiece = board.getPieceAt ? board.getPieceAt(move.to) : null;
         return !targetPiece || targetPiece.color !== piece.color;
     }
 
@@ -152,10 +205,18 @@ class PieceMovement {
      * @returns {boolean} True if path is clear
      */
     isPathClear(from, to, board) {
+        if (!from || !to || !board) return false;
+        
         const fromFile = from.charCodeAt(0) - 97;
         const fromRank = parseInt(from[1]) - 1;
         const toFile = to.charCodeAt(0) - 97;
         const toRank = parseInt(to[1]) - 1;
+        
+        // Check bounds
+        if (fromFile < 0 || fromFile > 5 || fromRank < 0 || fromRank > 5 ||
+            toFile < 0 || toFile > 5 || toRank < 0 || toRank > 5) {
+            return false;
+        }
         
         const fileDiff = toFile - fromFile;
         const rankDiff = toRank - fromRank;
@@ -172,9 +233,15 @@ class PieceMovement {
         for (let step = 1; step < steps; step++) {
             const checkFile = fromFile + (fileStep * step);
             const checkRank = fromRank + (rankStep * step);
+            
+            // Additional bounds check
+            if (checkFile < 0 || checkFile > 5 || checkRank < 0 || checkRank > 5) {
+                return false;
+            }
+            
             const checkSquare = `${String.fromCharCode(97 + checkFile)}${checkRank + 1}`;
             
-            if (board.getPieceAt(checkSquare)) {
+            if (board.getPieceAt && board.getPieceAt(checkSquare)) {
                 return false; // Path is blocked
             }
         }

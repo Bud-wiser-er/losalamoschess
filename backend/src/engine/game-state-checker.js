@@ -12,9 +12,11 @@ class GameStateChecker {
      * @returns {boolean} True if king is in check
      */
     isInCheck(board, kingColor) {
+        if (!board || !board.squares || !kingColor) return false;
+        
         // Find the king
         const kingSquare = this.findKing(board, kingColor);
-        if (!kingSquare) return false; // No king found (shouldn't happen)
+        if (!kingSquare) return false;
         
         // Check if any opponent piece can attack the king
         const opponentColor = kingColor === 'white' ? 'black' : 'white';
@@ -41,6 +43,8 @@ class GameStateChecker {
      * @returns {string|null} Square containing the king, or null if not found
      */
     findKing(board, color) {
+        if (!board || !board.squares || !color) return null;
+        
         for (let rank = 0; rank < 6; rank++) {
             for (let file = 0; file < 6; file++) {
                 const piece = board.squares[rank][file];
@@ -61,6 +65,8 @@ class GameStateChecker {
      * @returns {boolean} True if piece can attack the square
      */
     canPieceAttackSquare(piece, fromSquare, toSquare, board) {
+        if (!piece || !fromSquare || !toSquare || !board) return false;
+        
         // Create a mock move to test
         const mockMove = {
             from: fromSquare,
@@ -84,22 +90,22 @@ class GameStateChecker {
         }
         
         // For other pieces, use the normal movement validation
-        // Temporarily mark target square as occupied by opponent
-        const originalPiece = board.getPieceAt(toSquare);
+        // Create a mock board for testing attack
+        const testBoard = this.cloneBoard(board);
+        
+        // Temporarily mark target square as occupied by opponent to test if piece can attack
+        const originalPiece = testBoard.getPieceAt(toSquare);
         const mockTargetPiece = {
             type: 'pawn',
             color: piece.color === 'white' ? 'black' : 'white',
             notation: piece.color === 'white' ? 'p' : 'P'
         };
         
-        // Temporarily set a piece at target square for attack validation
-        board.setPieceAt(toSquare, mockTargetPiece);
+        // Set a piece at target for attack validation
+        testBoard.setPieceAt(toSquare, mockTargetPiece);
         
         // Check if the piece can move to (attack) that square
-        const canAttack = this.pieceMovement.isValidMove(piece, mockMove, board);
-        
-        // Restore original piece (or null)
-        board.setPieceAt(toSquare, originalPiece);
+        const canAttack = this.pieceMovement.isValidMove(piece, mockMove, testBoard);
         
         return canAttack;
     }
@@ -111,6 +117,8 @@ class GameStateChecker {
      * @returns {boolean} True if there's at least one legal move
      */
     hasLegalMoves(board, color) {
+        if (!board || !board.squares || !color) return false;
+        
         for (let fromRank = 0; fromRank < 6; fromRank++) {
             for (let fromFile = 0; fromFile < 6; fromFile++) {
                 const piece = board.squares[fromRank][fromFile];
@@ -153,6 +161,8 @@ class GameStateChecker {
      * @returns {Object} Cloned board
      */
     cloneBoard(board) {
+        if (!board || !board.squares) return null;
+        
         const cloned = {
             squares: board.squares.map(row => row.map(piece => 
                 piece ? { ...piece } : null
@@ -165,8 +175,21 @@ class GameStateChecker {
         };
         
         // Add methods
-        cloned.getPieceAt = board.getPieceAt;
-        cloned.setPieceAt = board.setPieceAt;
+        cloned.getPieceAt = function(square) {
+            if (!square || typeof square !== 'string' || square.length !== 2) return null;
+            const file = square.charCodeAt(0) - 97;
+            const rank = parseInt(square[1]) - 1;
+            if (rank < 0 || rank > 5 || file < 0 || file > 5) return null;
+            return this.squares[rank][file];
+        };
+        
+        cloned.setPieceAt = function(square, piece) {
+            if (!square || typeof square !== 'string' || square.length !== 2) return;
+            const file = square.charCodeAt(0) - 97;
+            const rank = parseInt(square[1]) - 1;
+            if (rank < 0 || rank > 5 || file < 0 || file > 5) return;
+            this.squares[rank][file] = piece;
+        };
         
         return cloned;
     }
