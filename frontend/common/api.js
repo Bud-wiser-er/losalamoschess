@@ -1,9 +1,8 @@
 // common/api.js - Updated with your backend integration
 // API communication module for Los Alamos Chess
 
-let API_BASE = process.env.NODE_ENV === 'production' 
-    ? 'https://your-production-api.com/api' 
-    : 'http://localhost:3000/api';
+// Browser-compatible environment detection
+let API_BASE = 'http://localhost:3000/api';
 
 /**
  * Set the API base URL
@@ -19,6 +18,37 @@ export function setApiBase(baseUrl) {
  */
 export function getApiBase() {
     return API_BASE;
+}
+
+/**
+ * Handle API response
+ * @param {Response} response - Fetch response
+ * @param {string} method - HTTP method
+ * @param {string} url - Request URL
+ * @returns {Promise<any>} Response data
+ */
+async function handleResponse(response, method, url) {
+    const contentType = response.headers.get('content-type');
+    const isJson = contentType && contentType.includes('application/json');
+    
+    let data;
+    if (isJson) {
+        data = await response.json();
+    } else {
+        data = { message: await response.text() };
+    }
+    
+    console.log(`📡 API Response: ${method} ${url} - ${response.status}`, data);
+    
+    if (!response.ok) {
+        throw new APIError(
+            data.message || `HTTP ${response.status}`,
+            response.status,
+            data
+        );
+    }
+    
+    return data;
 }
 
 /**
@@ -74,22 +104,20 @@ export async function apiRequest(endpoint, options = {}) {
             } else {
                 // Refresh failed, redirect to login
                 redirectToLogin();
-                throw new APIError('Authentication required', 401);
+                throw new APIError('Session expired', 401);
             }
         }
         
         return handleResponse(response, fetchOptions.method, url);
         
     } catch (error) {
-        console.error(`❌ API Error: ${fetchOptions.method} ${url}`, error);
-        
         if (error instanceof APIError) {
             throw error;
         }
         
-        // Network or other errors
+        console.error(`❌ API Request failed: ${fetchOptions.method} ${url}`, error);
         throw new APIError(
-            error.message || 'Network error occurred',
+            error.message || 'Network error',
             0,
             { originalError: error }
         );
@@ -97,52 +125,25 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 /**
- * Handle API response
- */
-async function handleResponse(response, method, url) {
-    if (!response.ok) {
-        let errorData;
-        try {
-            errorData = await response.json();
-        } catch {
-            errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
-        }
-        
-        throw new APIError(
-            errorData.message || `HTTP ${response.status}: ${response.statusText}`,
-            response.status,
-            errorData
-        );
-    }
-    
-    // Parse response based on content type
-    const contentType = response.headers.get('content-type');
-    let data;
-    
-    if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
-    } else {
-        data = await response.text();
-    }
-    
-    console.log(`✅ API Response: ${method} ${url}`, data);
-    return data;
-}
-
-/**
  * Refresh access token using refresh token
+ * @returns {Promise<boolean>} Success status
  */
 async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    
+    if (!refreshToken) {
+        console.log('❌ No refresh token available');
+        return false;
+    }
+    
     try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-            throw new Error('No refresh token available');
-        }
-
+        console.log('🔄 Refreshing access token...');
+        
         const response = await fetch(`${API_BASE}/auth/refresh`, {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             credentials: 'include',
             body: JSON.stringify({ refreshToken })
@@ -314,18 +315,18 @@ export const auth = {
 };
 
 /**
- * Game API calls - Updated for your backend
+ * Game API calls
  */
 export const game = {
     /**
      * Create new game
-     * @param {Object} gameConfig - Game configuration
+     * @param {Object} gameOptions - Game configuration
      * @returns {Promise<Object>} Game data
      */
-    async create(gameConfig = {}) {
+    async create(gameOptions = {}) {
         return apiRequest('/games', {
             method: 'POST',
-            body: JSON.stringify(gameConfig)
+            body: JSON.stringify(gameOptions)
         });
     },
     
@@ -339,47 +340,45 @@ export const game = {
     },
     
     /**
-     * Make a move
+     * Join game
      * @param {string} gameId - Game ID
-     * @param {Object} move - Move data (uci, from, to)
+     * @returns {Promise<Object>} Join response
+     */
+    async join(gameId) {
+        return apiRequest(`/games/${gameId}/join`, {
+            method: 'POST'
+        });
+    },
+    
+    /**
+     * Make move
+     * @param {string} gameId - Game ID
+     * @param {Object} move - Move data
      * @returns {Promise<Object>} Move response
      */
     async makeMove(gameId, move) {
         return apiRequest(`/games/${gameId}/moves`, {
             method: 'POST',
-            body: JSON.stringify(move)
+            body: JSON.stringify({ move })
         });
     },
     
     /**
-     * Get game history
+     * Get legal moves
      * @param {string} gameId - Game ID
-     * @returns {Promise<Array>} Move history
+     * @returns {Promise<Array>} Legal moves
      */
-    async getHistory(gameId) {
-        return apiRequest(`/games/${gameId}/history`);
+    async getLegalMoves(gameId) {
+        return apiRequest(`/games/${gameId}/legal-moves`);
     },
     
     /**
-     * Resign game
+     * Export game as PGN
      * @param {string} gameId - Game ID
-     * @returns {Promise<Object>} Game result
+     * @returns {Promise<string>} PGN string
      */
-    async resign(gameId) {
-        return apiRequest(`/games/${gameId}/resign`, {
-            method: 'POST'
-        });
-    },
-    
-    /**
-     * Offer draw
-     * @param {string} gameId - Game ID
-     * @returns {Promise<Object>} Draw offer response
-     */
-    async offerDraw(gameId) {
-        return apiRequest(`/games/${gameId}/draw`, {
-            method: 'POST'
-        });
+    async exportPGN(gameId) {
+        return apiRequest(`/games/${gameId}/pgn`);
     }
 };
 
@@ -390,9 +389,9 @@ export const game = {
 export function isAuthenticated() {
     const token = localStorage.getItem('accessToken');
     if (!token) return false;
-
+    
     try {
-        // Basic JWT expiration check (without verification)
+        // Simple JWT expiration check
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload.exp * 1000 > Date.now();
     } catch {
