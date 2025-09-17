@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Register - Los Alamos Chess</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #4facfe, #8e44ad);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .card {
+      background: #fff;
+      padding: 2.5rem;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+    }
+
+    .card h2 {
+      margin-bottom: 1.5rem;
+      color: #2c3e50;
+    }
+
+    .input-group {
+      margin-bottom: 1.2rem;
+      text-align: left;
+      position: relative;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+      color: #333;
+    }
+
+    .input-group input {
+      width: 100%;
+      padding: 0.9rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    .char-counter {
+      font-size: 0.75rem;
+      color: #666;
+      text-align: right;
+      margin-top: 0.2rem;
+      transition: color 0.2s ease;
+    }
+
+    .char-counter.max {
+      color: red;
+      font-weight: bold;
+    }
+
+    .toggle-password {
+      position: absolute;
+      right: 12px;
+      top: 35px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      color: #444;
+      user-select: none;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 1rem;
+      background: linear-gradient(135deg, #4facfe, #8e44ad);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: opacity 0.2s ease-in-out;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .error {
+      color: red;
+      font-size: 0.85rem;
+      margin-top: -0.5rem;
+      margin-bottom: 0.5rem;
+      display: none;
+    }
+
+    .password-strength {
+      font-size: 0.85rem;
+      margin-top: 0.3rem;
+      color: #444;
+    }
+
+    .weak { color: red; }
+    .medium { color: orange; }
+    .strong { color: green; }
+
+    .checkbox-group {
+      text-align: left;
+      margin-bottom: 1rem;
+    }
+
+    .checkbox-group label {
+      font-size: 0.85rem;
+      color: #333;
+    }
+
+    .checkbox-group a {
+      color: #8e44ad;
+      cursor: pointer;
+      font-weight: bold;
+      text-decoration: underline;
+    }
+
+    .link {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+    }
+
+    .link a {
+      color: #8e44ad;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .link a:hover {
+      text-decoration: underline;
+    }
+
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 12px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      text-align: left;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+
+    .modal-header {
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+
+    .modal-close {
+      float: right;
+      cursor: pointer;
+      font-size: 1.2rem;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Create Account</h2>
+    <form id="registerForm">
+      <div class="input-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" maxlength="20" required>
+        <div class="char-counter" id="usernameCounter">0 / 20</div>
+        <div class="error" id="usernameError">Username is required.</div>
+      </div>
+
+      <div class="input-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" maxlength="50" required>
+        <div class="char-counter" id="emailCounter">0 / 50</div>
+        <div class="error" id="emailError">Please enter a valid email.</div>
+      </div>
+
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" maxlength="30" required>
+        <span class="toggle-password" onclick="togglePassword('password', this)">-</span>
+        <div class="char-counter" id="passwordCounter">0 / 30</div>
+        <div class="error" id="passwordError">Password is required.</div>
+        <div class="password-strength" id="strengthText"></div>
+      </div>
+
+      <div class="input-group">
+        <label for="confirmPassword">Confirm Password</label>
+        <input type="password" id="confirmPassword" maxlength="30" required>
+        <span class="toggle-password" onclick="togglePassword('confirmPassword', this)">-</span>
+        <div class="char-counter" id="confirmCounter">0 / 30</div>
+        <div class="error" id="confirmError">Passwords do not match.</div>
+      </div>
+
+      <div class="checkbox-group">
+        <input type="checkbox" id="terms" required>
+        <label for="terms">
+          I agree to the <a id="termsLink">Terms & Conditions</a> and POPIA compliance policy
+        </label>
+        <div class="error" id="termsError">You must accept the terms to continue.</div>
+      </div>
+
+      <button type="submit" class="btn">Register</button>
+    </form>
+
+    <div class="link">
+      Already have an account? <a href="login.html">Login here</a>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div id="termsModal" class="modal">
+    <div class="modal-content">
+      <span class="modal-close" id="closeModal">&times;</span>
+      <div class="modal-header">Terms & Conditions</div>
+      <p>
+        These are the Terms & Conditions of using the Los Alamos Chess platform.  
+        By creating an account, you agree to comply with the rules of conduct, respect other players, and adhere to POPIA compliance for personal data.  
+        <br><br>
+        1. No abusive or harmful behavior. <br>
+        2. Your data is protected under POPIA guidelines. <br>
+        3. Passwords are securely stored and not shared. <br>
+        4. The platform may suspend accounts that violate community rules. <br>
+        5. By registering, you consent to data processing required for gameplay and tournaments.  
+        <br><br>
+        For the full legal document, please contact the development team.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('registerForm');
+    const passwordInput = document.getElementById('password');
+    const strengthText = document.getElementById('strengthText');
+
+    // Character counters
+    function setupCounter(id, counterId, max) {
+      const input = document.getElementById(id);
+      const counter = document.getElementById(counterId);
+      input.addEventListener('input', () => {
+        counter.textContent = `${input.value.length} / ${max}`;
+        if (input.value.length >= max) {
+          counter.classList.add("max");
+        } else {
+          counter.classList.remove("max");
+        }
+      });
+    }
+    setupCounter("username", "usernameCounter", 20);
+    setupCounter("email", "emailCounter", 50);
+    setupCounter("password", "passwordCounter", 30);
+    setupCounter("confirmPassword", "confirmCounter", 30);
+
+    // Toggle password visibility with dynamic eye
+    function togglePassword(id, el) {
+      const input = document.getElementById(id);
+      if (input.type === "password") {
+        input.type = "text";
+        el.textContent = "👁"; // open eye
+      } else {
+        input.type = "password";
+        el.textContent = "-"; // closed eye
+      }
+    }
+
+    // Password strength checker
+    passwordInput.addEventListener('input', () => {
+      const val = passwordInput.value;
+      let strength = "Weak";
+      let cls = "weak";
+
+      if (val.length >= 8 && /[A-Z]/.test(val) && /\d/.test(val) && /[^A-Za-z0-9]/.test(val)) {
+        strength = "Strong";
+        cls = "strong";
+      } else if (val.length >= 6 && (/[A-Z]/.test(val) || /\d/.test(val))) {
+        strength = "Medium";
+        cls = "medium";
+      }
+
+      strengthText.textContent = val ? `Strength: ${strength}` : "";
+      strengthText.className = `password-strength ${cls}`;
+    });
+
+    // Modal functionality
+    const termsLink = document.getElementById('termsLink');
+    const termsModal = document.getElementById('termsModal');
+    const closeModal = document.getElementById('closeModal');
+
+    termsLink.addEventListener('click', () => {
+      termsModal.style.display = "flex";
+    });
+
+    closeModal.addEventListener('click', () => {
+      termsModal.style.display = "none";
+    });
+
+    window.addEventListener('click', (e) => {
+      if (e.target === termsModal) {
+        termsModal.style.display = "none";
+      }
+    });
+
+    // Validate and mock submit
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      document.querySelectorAll('.error').forEach(el => el.style.display = 'none');
+
+      const username = document.getElementById('username').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = passwordInput.value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const terms = document.getElementById('terms').checked;
+
+      let valid = true;
+
+      if (!username) {
+        document.getElementById('usernameError').style.display = 'block';
+        valid = false;
+      }
+
+      if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+        document.getElementById('emailError').style.display = 'block';
+        valid = false;
+      }
+
+      if (!password) {
+        document.getElementById('passwordError').style.display = 'block';
+        valid = false;
+      }
+
+      if (password !== confirmPassword) {
+        document.getElementById('confirmError').style.display = 'block';
+        valid = false;
+      }
+
+      if (!terms) {
+        document.getElementById('termsError').style.display = 'block';
+        valid = false;
+      }
+
+      if (valid) {
+        setTimeout(() => {
+          alert("✅ Registration successful! (Ready to connect to backend API)");
+        }, 600);
+      }
+    });
+  </script>
+
+</body>
+</html>
