@@ -9,6 +9,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:auth": "node test-auth.js",
+    "test:api": "node test-api.js",
+    "test:integration": "npm run test:auth && npm run test:api",
     "db:setup": "node database/setup.js",
     "db:test": "node database/test-connection.js",
     "db:seed": "node database/seed.js",
@@ -19,7 +22,9 @@
     "fresh-install": "npm run clean && npm install",
     "validate": "node -e \"console.log('Environment validation complete')\"",
     "health": "npm run db:test && echo Health check passed",
-    "setup": "npm install && npm run db:setup && npm run db:test"
+    "setup": "npm install && npm run db:setup && npm run db:test",
+    "install-deps": "npm install",
+    "test:complete": "npm run test:auth && npm run test:api && npm run test"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -56,8 +61,14 @@
     "game",
     "nodejs",
     "express",
-    "postgresql"
+    "postgresql",
+    "realtime",
+    "web-application"
   ],
   "author": "EPE321 Team",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/losalamos-chess-backend.git"
+  }
 }
