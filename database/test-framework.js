@@ -78,8 +78,8 @@ class TestFramework {
         return this.results;
     }
 
-    /**
-     * Run a single test case
+   /**
+     * Run a single test case with improved error handling
      */
     async runSingleTest(test) {
         let client = null;
@@ -95,12 +95,26 @@ class TestFramework {
 
             client = await this.pool.connect();
             
-            // Execute test in transaction (rollback after test)
-            await client.query('BEGIN');
+            // For tests that expect constraint violations, don't use transactions
+            const expectsConstraintViolation = test.id === 'DB-02' || test.id === 'DB-08' || 
+                                             test.id === 'DB-11' || test.id === 'DB-14';
             
-            const result = await test.testFunction(client);
+            let result;
             
-            await client.query('ROLLBACK'); // Always rollback test changes
+            if (expectsConstraintViolation) {
+                // Run without transaction for constraint-testing tests
+                result = await test.testFunction(client);
+            } else {
+                // Use transaction for other tests
+                await client.query('BEGIN');
+                try {
+                    result = await test.testFunction(client);
+                    await client.query('ROLLBACK'); // Always rollback to keep tests isolated
+                } catch (error) {
+                    await client.query('ROLLBACK');
+                    throw error;
+                }
+            }
             
             if (result.success) {
                 console.log(`  PASS: ${result.message}`);
@@ -131,14 +145,6 @@ class TestFramework {
             }
             
         } catch (error) {
-            if (client) {
-                try {
-                    await client.query('ROLLBACK');
-                } catch (rollbackError) {
-                    // Ignore rollback errors
-                }
-            }
-            
             console.log(`  ERROR: ${error.message}`);
             this.results.failed++;
             this.results.errors.push({
