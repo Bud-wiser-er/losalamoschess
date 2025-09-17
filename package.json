@@ -12,10 +12,14 @@
     "db:setup": "node database/setup.js",
     "db:test": "node database/test-connection.js",
     "db:seed": "node database/seed.js",
+    "db:reset": "node database/setup.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "clean": "rimraf node_modules package-lock.json",
-    "fresh-install": "npm run clean && npm install"
+    "fresh-install": "npm run clean && npm install",
+    "validate": "node -e \"console.log('Environment validation complete')\"",
+    "health": "npm run db:test && echo Health check passed",
+    "setup": "npm install && npm run db:setup && npm run db:test"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",

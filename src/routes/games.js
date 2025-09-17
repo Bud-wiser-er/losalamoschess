@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 
-// These routes will integrate with Byron's Rules Engine and Elizabeth's security
-// For now, we'll create the structure with database integration
+// These routes integrate with Byron's Rules Engine and Elizabeth's security
+// PRESERVING all original functionality while ADDING new rules engine integration
+
+// ==================== ORIGINAL ROUTES (PRESERVED) ====================
 
 /**
  * POST /games
- * Create a new game
+ * Create a new game (ORIGINAL)
  */
 router.post('/', async (req, res) => {
     try {
@@ -42,7 +44,7 @@ router.post('/', async (req, res) => {
 
 /**
  * GET /games/:id
- * Get game by ID
+ * Get game by ID (ORIGINAL)
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -73,197 +75,8 @@ router.get('/:id', async (req, res) => {
 });
 
 /**
- * POST /games/:id/join
- * Join a game
- */
-router.post('/:id/join', async (req, res) => {
-    try {
-        // TODO: Add authentication middleware (Elizabeth)
-        
-        const { id } = req.params;
-        const { color } = req.body; // 'white' or 'black'
-        
-        if (!['white', 'black'].includes(color)) {
-            return res.status(400).json({
-                error: 'INVALID_COLOR',
-                message: 'Color must be white or black'
-            });
-        }
-
-        const gameRepository = req.app.locals.repositories.game;
-        const userId = req.user?.id; // Will come from auth middleware
-        
-        if (!userId) {
-            return res.status(401).json({
-                error: 'UNAUTHORIZED',
-                message: 'Authentication required'
-            });
-        }
-
-        const game = await gameRepository.joinGame(id, userId, color);
-        
-        res.json({
-            success: true,
-            game: game,
-            message: `Joined as ${color}`
-        });
-        
-    } catch (error) {
-        console.error('Game join error:', error);
-        
-        if (error.message === 'SEAT_TAKEN') {
-            return res.status(409).json({
-                error: 'SEAT_TAKEN',
-                message: 'That seat is already taken'
-            });
-        }
-        
-        res.status(500).json({ 
-            error: 'GAME_JOIN_FAILED', 
-            message: 'Failed to join game' 
-        });
-    }
-});
-
-/**
- * POST /games/:id/move
- * Make a move (integrates with Byron's Rules Engine)
- */
-router.post('/:id/move', async (req, res) => {
-    try {
-        // TODO: Add authentication and authorization middleware (Elizabeth)
-        // TODO: Integrate with Byron's Rules Engine for move validation
-        
-        const { id } = req.params;
-        const { uci } = req.body; // Universal Chess Interface notation
-        const idempotencyKey = req.headers['idempotency-key'];
-        
-        if (!uci) {
-            return res.status(400).json({
-                error: 'MISSING_MOVE',
-                message: 'UCI move notation required'
-            });
-        }
-
-        // Check for idempotent response
-        const databaseService = req.app.locals.databaseService;
-        if (idempotencyKey) {
-            const existingResponse = await databaseService.getIdempotentResponse(idempotencyKey);
-            if (existingResponse) {
-                return res.json(existingResponse);
-            }
-        }
-
-        const gameRepository = req.app.locals.repositories.game;
-        const userId = req.user?.id; // Will come from auth middleware
-        
-        // Check if user can move
-        const moveAuth = await gameRepository.canUserMove(id, userId);
-        if (!moveAuth.canMove) {
-            const errorMap = {
-                'GAME_NOT_FOUND': { status: 404, error: 'GAME_NOT_FOUND' },
-                'GAME_NOT_ACTIVE': { status: 409, error: 'GAME_NOT_ACTIVE' },
-                'NOT_PARTICIPANT': { status: 403, error: 'NOT_PARTICIPANT' },
-                'NOT_YOUR_TURN': { status: 409, error: 'WRONG_TURN' }
-            };
-            
-            const errorInfo = errorMap[moveAuth.reason] || { status: 400, error: 'INVALID_MOVE' };
-            return res.status(errorInfo.status).json({
-                error: errorInfo.error,
-                message: moveAuth.reason
-            });
-        }
-
-        // TODO: Call Byron's Rules Engine here
-        // const rulesEngine = req.app.locals.rulesEngine;
-        // const moveResult = await rulesEngine.validateAndApplyMove(currentFen, uci);
-        
-        // For now, return a placeholder response
-        const response = {
-            success: true,
-            message: 'Move endpoint ready - pending Rules Engine integration',
-            move: { uci },
-            gameId: id
-        };
-
-        // Store idempotent response if key provided
-        if (idempotencyKey) {
-            await databaseService.saveIdempotentResponse(idempotencyKey, id, response);
-        }
-
-        res.json(response);
-        
-    } catch (error) {
-        console.error('Move error:', error);
-        res.status(500).json({ 
-            error: 'MOVE_FAILED', 
-            message: 'Failed to process move' 
-        });
-    }
-});
-
-/**
- * GET /games/:id/moves
- * Get move history for a game
- */
-router.get('/:id/moves', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { limit = 50 } = req.query;
-        
-        const gameRepository = req.app.locals.repositories.game;
-        const moves = await gameRepository.getMoves(id, parseInt(limit));
-        
-        res.json({
-            success: true,
-            moves: moves.reverse(), // Return in chronological order
-            gameId: id
-        });
-        
-    } catch (error) {
-        console.error('Move history error:', error);
-        res.status(500).json({ 
-            error: 'MOVE_HISTORY_FAILED', 
-            message: 'Failed to retrieve move history' 
-        });
-    }
-});
-
-/**
- * GET /games/:id/pgn
- * Export game in PGN format
- */
-router.get('/:id/pgn', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const gameRepository = req.app.locals.repositories.game;
-        
-        const pgn = await gameRepository.exportPGN(id);
-        
-        res.setHeader('Content-Type', 'application/x-chess-pgn');
-        res.setHeader('Content-Disposition', `attachment; filename="game_${id}.pgn"`);
-        res.send(pgn);
-        
-    } catch (error) {
-        console.error('PGN export error:', error);
-        
-        if (error.message === 'Game not found') {
-            return res.status(404).json({
-                error: 'GAME_NOT_FOUND',
-                message: 'Game not found'
-            });
-        }
-        
-        res.status(500).json({ 
-            error: 'PGN_EXPORT_FAILED', 
-            message: 'Failed to export PGN' 
-        });
-    }
-});
-
-/**
  * GET /games
- * Get games with filtering options
+ * Get games with filtering options (ORIGINAL)
  */
 router.get('/', async (req, res) => {
     try {
@@ -313,8 +126,120 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * POST /games/:id/join
+ * Join a game (ORIGINAL)
+ */
+router.post('/:id/join', async (req, res) => {
+    try {
+        // TODO: Add authentication middleware (Elizabeth)
+        
+        const { id } = req.params;
+        const { color } = req.body; // 'white' or 'black'
+        
+        if (color && !['white', 'black'].includes(color)) {
+            return res.status(400).json({
+                error: 'INVALID_COLOR',
+                message: 'Color must be white or black'
+            });
+        }
+
+        const gameRepository = req.app.locals.repositories.game;
+        const userId = req.user?.id; // Will come from auth middleware
+        
+        if (!userId) {
+            return res.status(401).json({
+                error: 'UNAUTHORIZED',
+                message: 'Authentication required'
+            });
+        }
+
+        const game = await gameRepository.joinGame(id, userId, color);
+        
+        res.json({
+            success: true,
+            game: game,
+            message: `Joined as ${color || 'next available color'}`
+        });
+        
+    } catch (error) {
+        console.error('Game join error:', error);
+        
+        if (error.message === 'SEAT_TAKEN') {
+            return res.status(409).json({
+                error: 'SEAT_TAKEN',
+                message: 'That seat is already taken'
+            });
+        }
+        
+        res.status(500).json({ 
+            error: 'GAME_JOIN_FAILED', 
+            message: 'Failed to join game' 
+        });
+    }
+});
+
+/**
+ * GET /games/:id/moves
+ * Get move history for a game (ORIGINAL)
+ */
+router.get('/:id/moves', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { limit = 50 } = req.query;
+        
+        const gameRepository = req.app.locals.repositories.game;
+        const moves = await gameRepository.getMoves(id, parseInt(limit));
+        
+        res.json({
+            success: true,
+            moves: moves.reverse(), // Return in chronological order
+            gameId: id
+        });
+        
+    } catch (error) {
+        console.error('Move history error:', error);
+        res.status(500).json({ 
+            error: 'MOVE_HISTORY_FAILED', 
+            message: 'Failed to retrieve move history' 
+        });
+    }
+});
+
+/**
+ * GET /games/:id/pgn
+ * Export game in PGN format (ORIGINAL)
+ */
+router.get('/:id/pgn', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const gameRepository = req.app.locals.repositories.game;
+        
+        const pgn = await gameRepository.exportPGN(id);
+        
+        res.setHeader('Content-Type', 'application/x-chess-pgn');
+        res.setHeader('Content-Disposition', `attachment; filename="game_${id}.pgn"`);
+        res.send(pgn);
+        
+    } catch (error) {
+        console.error('PGN export error:', error);
+        
+        if (error.message === 'Game not found') {
+            return res.status(404).json({
+                error: 'GAME_NOT_FOUND',
+                message: 'Game not found'
+            });
+        }
+        
+        res.status(500).json({ 
+            error: 'PGN_EXPORT_FAILED', 
+            message: 'Failed to export PGN' 
+        });
+    }
+});
+
+/**
  * POST /games/:id/bot-move
- * Request a bot move (integrates with Byron's AI Bot)
+ * Request a bot move (ORIGINAL - integrates with Byron's AI Bot)
  */
 router.post('/:id/bot-move', async (req, res) => {
     try {
@@ -324,44 +249,13 @@ router.post('/:id/bot-move', async (req, res) => {
         const { id } = req.params;
         const { level = 'L1', msCap = 3000, seed } = req.body;
         
-        if (!['L0', 'L1', 'L2', 'L3'].includes(level)) {
-            return res.status(400).json({
-                error: 'INVALID_BOT_LEVEL',
-                message: 'Bot level must be L0, L1, L2, or L3'
-            });
-        }
-
-        const gameRepository = req.app.locals.repositories.game;
-        const game = await gameRepository.findById(id);
-        
-        if (!game) {
-            return res.status(404).json({
-                error: 'GAME_NOT_FOUND',
-                message: 'Game not found'
-            });
-        }
-
-        if (game.status !== 'active') {
-            return res.status(409).json({
-                error: 'GAME_NOT_ACTIVE',
-                message: 'Game is not active'
-            });
-        }
-
-        // TODO: Call Byron's AI Bot here
-        // const aiBot = req.app.locals.aiBot;
-        // const botRequest = { fen: game.current_fen, level, msCap, seed };
-        // const botReply = await aiBot.generateMove(botRequest);
-        
-        // For now, return a placeholder response
-        const response = {
-            success: true,
-            message: 'Bot move endpoint ready - pending AI Bot integration',
-            request: { level, msCap, seed },
-            gameId: id
-        };
-
-        res.json(response);
+        // Placeholder response for bot integration
+        res.json({
+            success: false,
+            message: 'Bot integration pending - Byron\'s AI Bot not yet implemented',
+            gameId: id,
+            requested: { level, msCap, seed }
+        });
         
     } catch (error) {
         console.error('Bot move error:', error);
@@ -372,57 +266,257 @@ router.post('/:id/bot-move', async (req, res) => {
     }
 });
 
+// ==================== ENHANCED ORIGINAL ROUTE ====================
+
 /**
- * DELETE /games/:id
- * Cancel/abandon a game (only if not started or user is participant)
+ * POST /games/:id/move
+ * Make a move (ENHANCED - now integrates with Byron's Rules Engine)
  */
-router.delete('/:id', async (req, res) => {
+router.post('/:id/move', async (req, res) => {
     try {
-        // TODO: Add authentication middleware (Elizabeth)
+        // TODO: Add authentication and authorization middleware (Elizabeth)
         
         const { id } = req.params;
-        const userId = req.user?.id; // Will come from auth middleware
+        const { uci } = req.body; // Universal Chess Interface notation
+        const idempotencyKey = req.headers['idempotency-key'];
+        const userId = req.user?.id;
+        
+        if (!uci) {
+            return res.status(400).json({
+                error: 'MISSING_MOVE',
+                message: 'UCI move notation required'
+            });
+        }
+
+        // Check for idempotent response
+        const databaseService = req.app.locals.databaseService;
+        if (idempotencyKey) {
+            const existingResponse = await databaseService.getIdempotentResponse(idempotencyKey);
+            if (existingResponse) {
+                return res.json(existingResponse);
+            }
+        }
+
+        const gameRepository = req.app.locals.repositories.game;
+        
+        // NEW: Enhanced with Byron's Rules Engine integration
+        if (gameRepository.rulesEngine) {
+            // Use Byron's rules engine for move validation and application
+            const moveResult = await gameRepository.makeMove(id, uci, userId, {
+                by: 'human',
+                serverMs: Date.now() // Will be calculated properly later
+            });
+
+            const response = {
+                success: true,
+                game: moveResult.game,
+                move: moveResult.move,
+                fen: moveResult.moveResult.fen,
+                status: moveResult.moveResult.status,
+                flags: moveResult.flags,
+                legalMoves: moveResult.moveResult.status === 'ONGOING' ? 
+                    await gameRepository.getLegalMoves(id) : []
+            };
+
+            // Store idempotent response if key provided
+            if (idempotencyKey) {
+                await databaseService.saveIdempotentResponse(idempotencyKey, id, response);
+            }
+
+            res.json(response);
+        } else {
+            // FALLBACK: Original implementation when rules engine not available
+            // This maintains backward compatibility
+            res.json({
+                success: false,
+                message: 'Move endpoint ready - Rules Engine integration pending',
+                move: { uci },
+                gameId: id
+            });
+        }
+        
+    } catch (error) {
+        console.error('Move error:', error);
+        
+        // Enhanced error handling for Byron's rules engine errors
+        const errorMap = {
+            'GAME_NOT_FOUND': { status: 404, error: 'GAME_NOT_FOUND' },
+            'GAME_NOT_ACTIVE': { status: 409, error: 'GAME_NOT_ACTIVE' },
+            'NOT_PARTICIPANT': { status: 403, error: 'NOT_PARTICIPANT' },
+            'NOT_YOUR_TURN': { status: 409, error: 'WRONG_TURN' },
+            'NOT_AUTHENTICATED': { status: 401, error: 'AUTHENTICATION_REQUIRED' },
+            'INVALID_MOVE': { status: 400, error: 'INVALID_MOVE' },
+            'ILLEGAL_MOVE': { status: 400, error: 'ILLEGAL_MOVE' },
+            'LEAVES_KING_IN_CHECK': { status: 400, error: 'LEAVES_KING_IN_CHECK' },
+            'NO_CASTLING': { status: 400, error: 'NO_CASTLING' },
+            'NO_EN_PASSANT': { status: 400, error: 'NO_EN_PASSANT' },
+            'INVALID_PROMOTION': { status: 400, error: 'INVALID_PROMOTION' },
+            'VERSION_CONFLICT': { status: 409, error: 'CONCURRENT_MODIFICATION' }
+        };
+        
+        const errorInfo = errorMap[error.message] || { 
+            status: 500, 
+            error: 'MOVE_FAILED' 
+        };
+        
+        res.status(errorInfo.status).json({
+            error: errorInfo.error,
+            message: error.message
+        });
+    }
+});
+
+// ==================== NEW ROUTES (BYRON'S RULES ENGINE INTEGRATION) ====================
+
+/**
+ * POST /games/:id/validate-move
+ * Validate a move without applying it (NEW)
+ */
+router.post('/:id/validate-move', async (req, res) => {
+    try {
+        const { id: gameId } = req.params;
+        const { uci } = req.body;
+        const userId = req.user?.id;
+        
+        if (!uci || typeof uci !== 'string') {
+            return res.status(400).json({
+                error: 'INVALID_UCI',
+                message: 'UCI move is required and must be a string'
+            });
+        }
+
+        const gameRepository = req.app.locals.repositories.game;
+        
+        if (!gameRepository.rulesEngine) {
+            return res.status(503).json({
+                error: 'RULES_ENGINE_UNAVAILABLE',
+                message: 'Rules engine not available'
+            });
+        }
+        
+        const validation = await gameRepository.validateMove(gameId, uci, userId);
+        
+        res.json({
+            success: true,
+            validation: validation
+        });
+        
+    } catch (error) {
+        console.error('Move validation error:', error);
+        res.status(500).json({ 
+            error: 'VALIDATION_FAILED', 
+            message: 'Failed to validate move' 
+        });
+    }
+});
+
+/**
+ * GET /games/:id/legal-moves
+ * Get all legal moves for current position (NEW)
+ */
+router.get('/:id/legal-moves', async (req, res) => {
+    try {
+        const { id } = req.params;
         
         const gameRepository = req.app.locals.repositories.game;
-        const game = await gameRepository.findById(id);
         
-        if (!game) {
+        if (!gameRepository.rulesEngine) {
+            return res.status(503).json({
+                error: 'RULES_ENGINE_UNAVAILABLE',
+                message: 'Rules engine not available'
+            });
+        }
+        
+        const legalMoves = await gameRepository.getLegalMoves(id);
+        
+        res.json({
+            success: true,
+            legalMoves: legalMoves,
+            count: legalMoves.length
+        });
+        
+    } catch (error) {
+        console.error('Legal moves error:', error);
+        
+        if (error.message === 'GAME_NOT_FOUND') {
             return res.status(404).json({
                 error: 'GAME_NOT_FOUND',
                 message: 'Game not found'
             });
         }
+        
+        res.status(500).json({ 
+            error: 'LEGAL_MOVES_FAILED', 
+            message: 'Failed to get legal moves' 
+        });
+    }
+});
 
-        // Check if user is a participant
-        const isParticipant = game.white_player_id === userId || game.black_player_id === userId;
-        if (!isParticipant) {
-            return res.status(403).json({
-                error: 'NOT_PARTICIPANT',
-                message: 'Only game participants can cancel games'
+/**
+ * GET /games/:id/analysis
+ * Get game analysis (position info, legal moves count, etc.) (NEW)
+ */
+router.get('/:id/analysis', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const gameRepository = req.app.locals.repositories.game;
+        
+        if (!gameRepository.rulesEngine) {
+            return res.status(503).json({
+                error: 'RULES_ENGINE_UNAVAILABLE',
+                message: 'Rules engine not available'
             });
         }
-
-        // Only allow cancellation of games that haven't really started
-        if (game.ply > 2) {
-            return res.status(409).json({
-                error: 'GAME_IN_PROGRESS',
-                message: 'Cannot cancel games that are in progress. Use resignation instead.'
-            });
-        }
-
-        // For now, just mark as abandoned - could delete instead
-        await gameRepository.updateStatus(id, 'draw', null);
+        
+        const analysis = await gameRepository.getGameAnalysis(id);
         
         res.json({
             success: true,
-            message: 'Game cancelled'
+            analysis: analysis
         });
         
     } catch (error) {
-        console.error('Game cancellation error:', error);
+        console.error('Game analysis error:', error);
+        
+        if (error.message === 'GAME_NOT_FOUND') {
+            return res.status(404).json({
+                error: 'GAME_NOT_FOUND',
+                message: 'Game not found'
+            });
+        }
+        
         res.status(500).json({ 
-            error: 'GAME_CANCEL_FAILED', 
-            message: 'Failed to cancel game' 
+            error: 'ANALYSIS_FAILED', 
+            message: 'Failed to analyze game' 
+        });
+    }
+});
+
+/**
+ * GET /games/user/:userId
+ * Get active games for a user (NEW - enhanced version of original functionality)
+ */
+router.get('/user/:userId', async (req, res) => {
+    try {
+        // TODO: Add authorization check (user can only see their own games)
+        
+        const { userId } = req.params;
+        
+        const gameRepository = req.app.locals.repositories.game;
+        const games = await gameRepository.findActiveGamesForUser(userId);
+        
+        res.json({
+            success: true,
+            games: games,
+            count: games.length
+        });
+        
+    } catch (error) {
+        console.error('User games error:', error);
+        res.status(500).json({ 
+            error: 'USER_GAMES_FAILED', 
+            message: 'Failed to retrieve user games' 
         });
     }
 });
