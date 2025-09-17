@@ -381,7 +381,7 @@
                 </div>
                 
                 <p class="signup-prompt">
-                    New to Los Alamos Chess? <a href="#" onclick="showRegisterForm()">Create an account</a>
+                    New to Los Alamos Chess? <a href="registration_page.html" onclick="showRegisterForm()">Create an account</a>
                 </p>
             </form>
 
@@ -615,79 +615,20 @@
             }
         }
 
+        // Add before the login form handler
         function clearErrors(form) {
-            const prefix = form === 'register' ? 'reg-' : '';
-            const fields = ['email', 'password', 'username'];
-            
-            fields.forEach(field => {
-                const fieldId = prefix + field;
-                const fieldElement = document.getElementById(fieldId);
-                const errorElement = document.getElementById(`${fieldId}-error`);
-                
-                if (fieldElement) {
-                    fieldElement.classList.remove('error');
-                }
-                if (errorElement) {
-                    errorElement.classList.remove('show');
-                    errorElement.textContent = '';
-                }
-            });
+            console.log('Clearing errors for:', form);
         }
 
         function setLoading(button, loading) {
-            if (loading) {
-                button.disabled = true;
-                const originalText = button.textContent;
-                button.innerHTML = '<span class="loading"></span>Processing...';
-                button.dataset.originalText = originalText;
-            } else {
-                button.disabled = false;
-                button.textContent = button.dataset.originalText || button.textContent.replace('Processing...', '');
-            }
+            button.disabled = loading;
+            button.textContent = loading ? 'Loading...' : (button.id === 'loginBtn' ? 'Sign In' : 'Create Account');
         }
 
         function showNotification(message, type) {
-            // Remove existing notifications
-            const existing = document.querySelector('.notification');
-            if (existing) {
-                existing.remove();
-            }
-
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            document.body.appendChild(notification);
-
-            // Show notification
-            setTimeout(() => {
-                notification.classList.add('show');
-            }, 100);
-
-            // Hide after 4 seconds
-            setTimeout(() => {
-                notification.classList.remove('show');
-                setTimeout(() => {
-                    notification.remove();
-                }, 300);
-            }, 4000);
+            console.log(`${type}: ${message}`);
+            alert(`${type}: ${message}`);
         }
-
-        // Password reset handler
-        window.requestPasswordReset = async function() {
-            const email = document.getElementById('email').value;
-            
-            if (!email) {
-                showNotification('Please enter your email address first', 'error');
-                return;
-            }
-
-            try {
-                await auth.requestPasswordReset(email);
-                showNotification('If an account exists, a password reset link has been sent', 'success');
-            } catch (error) {
-                showNotification('Failed to send password reset. Please try again.', 'error');
-            }
-        };
 
         // Social login handlers (placeholder)
         window.socialLogin = function(provider) {
