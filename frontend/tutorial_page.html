@@ -1,0 +1,978 @@
+<script type = "module">
+    import './common/api.js';
+    import './common/ui.js';
+    import './common/websocket.js';
+</script>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Los Alamos Chess - Tutorial</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            margin-right: 12px;
+        }
+
+        .logo-text {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 30px;
+            list-style: none;
+        }
+
+        .nav-menu a {
+            color: #555;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-menu a:hover, .nav-menu a.active {
+            color: #667eea;
+        }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 30px 20px;
+            display: flex;
+            gap: 30px;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+            height: fit-content;
+            position: sticky;
+            top: 100px;
+        }
+
+        .sidebar h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+
+        .lesson-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .lesson-item {
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #666;
+            background: transparent;
+            border: none;
+            width: 100%;
+            text-align: left;
+        }
+
+        .lesson-item:hover {
+            background: #f0f2f5;
+            color: #667eea;
+        }
+
+        .lesson-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .lesson-item.completed::before {
+            content: '✓';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            background: #10b981;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 20px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+
+        .lesson-number {
+            display: inline-block;
+            width: 25px;
+            height: 25px;
+            background: #e0e0e0;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 25px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .lesson-item.active .lesson-number {
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .progress-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .progress-bar {
+            background: #e0e0e0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 40%;
+            transition: width 0.5s ease;
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.07);
+        }
+
+        .tutorial-header {
+            margin-bottom: 30px;
+        }
+
+        .tutorial-title {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .tutorial-subtitle {
+            color: #666;
+            font-size: 18px;
+        }
+
+        /* Interactive Board */
+        .interactive-section {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 40px;
+        }
+
+        .mini-board-container {
+            flex: 1;
+        }
+
+        .mini-board {
+            width: 100%;
+            max-width: 420px;
+            aspect-ratio: 1;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            border: 3px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin: 0 auto;
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .square.light {
+            background: #f0d9b5;
+        }
+
+        .square.dark {
+            background: #b58863;
+        }
+
+        .square.highlight {
+            box-shadow: inset 0 0 0 4px #667eea;
+        }
+
+        .square.target {
+            background: #86efac !important;
+        }
+
+        .square.incorrect {
+            background: #fca5a5 !important;
+        }
+
+        .piece {
+            font-size: 36px;
+            user-select: none;
+            cursor: grab;
+            transition: transform 0.2s;
+        }
+
+        .piece:hover {
+            transform: scale(1.1);
+        }
+
+        .arrow {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .arrow svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Instruction Panel */
+        .instruction-panel {
+            flex: 1;
+        }
+
+        .instruction-box {
+            background: linear-gradient(135deg, #667eea20 0%, #764ba220 100%);
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .instruction-title {
+            color: #333;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .instruction-text {
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .key-points {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .key-points h4 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .key-points ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .key-points li {
+            padding: 8px 0;
+            color: #555;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .key-points li::before {
+            content: '→';
+            color: #667eea;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+
+        /* Try It Section */
+        .try-it-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+
+        .try-it-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .try-it-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .try-it-title {
+            font-size: 24px;
+            color: #333;
+        }
+
+        .challenge-text {
+            color: #555;
+            margin-bottom: 20px;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .hint-box {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .hint-icon {
+            color: #f59e0b;
+            font-size: 20px;
+        }
+
+        .hint-text {
+            color: #92400e;
+            flex: 1;
+        }
+
+        /* Control Buttons */
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #f0f2f5;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        /* Quiz Section */
+        .quiz-section {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 25px;
+            margin-top: 30px;
+        }
+
+        .quiz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .quiz-title {
+            font-size: 20px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .quiz-score {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .quiz-question {
+            color: #555;
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .quiz-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .quiz-option {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .quiz-option:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+        }
+
+        .quiz-option.correct {
+            border-color: #10b981;
+            background: #d1fae5;
+        }
+
+        .quiz-option.incorrect {
+            border-color: #ef4444;
+            background: #fee2e2;
+        }
+
+        .quiz-radio {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #d0d0d0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .quiz-option.selected .quiz-radio::after {
+            content: '';
+            width: 10px;
+            height: 10px;
+            background: #667eea;
+            border-radius: 50%;
+        }
+
+        /* Achievement Modal */
+        .achievement-modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            display: none;
+            z-index: 1000;
+        }
+
+        .achievement-modal.show {
+            display: block;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translate(-50%, -60%);
+                opacity: 0;
+            }
+            to {
+                transform: translate(-50%, -50%);
+                opacity: 1;
+            }
+        }
+
+        .achievement-icon {
+            font-size: 60px;
+            margin-bottom: 20px;
+        }
+
+        .achievement-title {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .achievement-text {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 999;
+        }
+
+        .modal-overlay.show {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                position: static;
+            }
+            
+            .interactive-section {
+                flex-direction: column;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-menu {
+                display: none;
+            }
+            
+            .content-area {
+                padding: 20px;
+            }
+            
+            .control-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <svg class="logo-icon" viewBox="0 0 100 100">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M50 10 L30 30 L30 50 L20 90 L80 90 L70 50 L70 30 Z" fill="url(#gradient)"/>
+                    <rect x="30" y="30" width="40" height="5" fill="url(#gradient)"/>
+                    <circle cx="50" cy="15" r="5" fill="url(#gradient)"/>
+                </svg>
+                <span class="logo-text">Los Alamos Chess</span>
+            </div>
+            
+            <nav>
+                <ul class="nav-menu">
+                    <li><a href="#play">Play</a></li>
+                    <li><a href="#tournaments">Tournaments</a></li>
+                    <li><a href="#learn" class="active">Learn</a></li>
+                    <li><a href="#social">Friends</a></li>
+                    <li><a href="#stats">Statistics</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h3>📚 Course Content</h3>
+            <div class="lesson-list">
+                <button class="lesson-item completed">
+                    <span class="lesson-number">1</span>
+                    <span>Introduction to Los Alamos</span>
+                </button>
+                <button class="lesson-item completed">
+                    <span class="lesson-number">2</span>
+                    <span>Board Setup & Pieces</span>
+                </button>
+                <button class="lesson-item active">
+                    <span class="lesson-number">3</span>
+                    <span>How Pieces Move</span>
+                </button>
+                <button class="lesson-item">
+                    <span class="lesson-number">4</span>
+                    <span>Special Rules</span>
+                </button>
+                <button class="lesson-item">
+                    <span class="lesson-number">5</span>
+                    <span>Check & Checkmate</span>
+                </button>
+                <button class="lesson-item">
+                    <span class="lesson-number">6</span>
+                    <span>Basic Tactics</span>
+                </button>
+                <button class="lesson-item">
+                    <span class="lesson-number">7</span>
+                    <span>Opening Principles</span>
+                </button>
+                <button class="lesson-item">
+                    <span class="lesson-number">8</span>
+                    <span>Endgame Basics</span>
+                </button>
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-label">
+                    <span>Overall Progress</span>
+                    <span>2/8 Complete</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Content Area -->
+        <main class="content-area">
+            <div class="tutorial-header">
+                <h1 class="tutorial-title">Lesson 3: How Pieces Move</h1>
+                <p class="tutorial-subtitle">Learn how each piece moves in Los Alamos Chess</p>
+            </div>
+
+            <!-- Interactive Section -->
+            <div class="interactive-section">
+                <div class="mini-board-container">
+                    <div class="mini-board" id="tutorial-board">
+                        <!-- Board will be generated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="instruction-panel">
+                    <div class="instruction-box">
+                        <h3 class="instruction-title">The Knight's L-Shaped Move</h3>
+                        <p class="instruction-text">
+                            The Knight moves in an "L" shape: two squares in one direction and one square perpendicular, 
+                            or one square in one direction and two squares perpendicular. It's the only piece that can jump over other pieces!
+                        </p>
+                    </div>
+                    
+                    <div class="key-points">
+                        <h4>🔑 Key Points</h4>
+                        <ul>
+                            <li>Knights move in an L-shape pattern</li>
+                            <li>They can jump over other pieces</li>
+                            <li>Knights always land on a square of opposite color</li>
+                            <li>From the center, a knight can reach 8 squares</li>
+                            <li>Knights are especially powerful in closed positions</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Try It Section -->
+            <div class="try-it-section">
+                <div class="try-it-header">
+                    <div class="try-it-icon">🎯</div>
+                    <h2 class="try-it-title">Practice Challenge</h2>
+                </div>
+                <p class="challenge-text">
+                    Move the white knight from b1 to capture the black pawn on d5. Remember, knights move in an L-shape 
+                    and can jump over other pieces. Try to find the shortest path!
+                </p>
+                
+                <div class="hint-box">
+                    <span class="hint-icon">💡</span>
+                    <div class="hint-text">
+                        <strong>Hint:</strong> The knight can reach d5 in just 2 moves. First move to c3, then capture on d5!
+                    </div>
+                </div>
+                
+                <div class="control-buttons">
+                    <button class="btn btn-secondary" onclick="resetChallenge()">
+                        ↺ Reset Board
+                    </button>
+                    <button class="btn btn-primary" onclick="showSolution()">
+                        👁 Show Solution
+                    </button>
+                    <button class="btn btn-success" onclick="checkSolution()">
+                        ✓ Check Answer
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quiz Section -->
+            <div class="quiz-section">
+                <div class="quiz-header">
+                    <h3 class="quiz-title">Quick Quiz</h3>
+                    <span class="quiz-score">Score: 0/3</span>
+                </div>
+                
+                <p class="quiz-question">
+                    Which of the following statements about the Knight is correct in Los Alamos Chess?
+                </p>
+                
+                <div class="quiz-options">
+                    <div class="quiz-option" onclick="selectQuizOption(this, false)">
+                        <div class="quiz-radio"></div>
+                        <span>Knights can only move forward like pawns</span>
+                    </div>
+                    <div class="quiz-option" onclick="selectQuizOption(this, true)">
+                        <div class="quiz-radio"></div>
+                        <span>Knights can jump over other pieces</span>
+                    </div>
+                    <div class="quiz-option" onclick="selectQuizOption(this, false)">
+                        <div class="quiz-radio"></div>
+                        <span>Knights move diagonally like bishops</span>
+                    </div>
+                    <div class="quiz-option" onclick="selectQuizOption(this, false)">
+                        <div class="quiz-radio"></div>
+                        <span>Knights cannot capture enemy pieces</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="control-buttons" style="margin-top: 40px; justify-content: space-between;">
+                <button class="btn btn-secondary" onclick="previousLesson()">
+                    ← Previous Lesson
+                </button>
+                <button class="btn btn-primary" onclick="nextLesson()">
+                    Next Lesson →
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Achievement Modal -->
+    <div class="modal-overlay" id="modal-overlay" onclick="closeAchievement()"></div>
+    <div class="achievement-modal" id="achievement-modal">
+        <div class="achievement-icon">🏆</div>
+        <h2 class="achievement-title">Lesson Complete!</h2>
+        <p class="achievement-text">
+            Great job! You've mastered how the Knight moves. You earned 50 XP!
+        </p>
+        <button class="btn btn-primary" onclick="closeAchievement()">Continue</button>
+    </div>
+
+    <script>
+        // Generate tutorial board
+        function generateTutorialBoard() {
+            const board = document.getElementById('tutorial-board');
+            board.innerHTML = '';
+            
+            // Simple position for knight movement demonstration
+            const position = {
+                'b1': '♘',  // White knight
+                'd5': '♟',  // Black pawn to capture
+                'c3': '',   // Highlighted square for knight path
+                'a2': '♙',  // White pawns for obstacles
+                'b2': '♙',
+                'c2': '♙'
+            };
+            
+            for (let rank = 6; rank >= 1; rank--) {
+                for (let file = 0; file < 6; file++) {
+                    const fileChar = String.fromCharCode(97 + file);
+                    const squareId = fileChar + rank;
+                    
+                    const square = document.createElement('div');
+                    square.className = 'square';
+                    square.id = 'tutorial-' + squareId;
+                    
+                    // Add color
+                    if ((file + rank) % 2 === 0) {
+                        square.classList.add('dark');
+                    } else {
+                        square.classList.add('light');
+                    }
+                    
+                    // Add piece if present
+                    if (position[squareId]) {
+                        const piece = document.createElement('span');
+                        piece.className = 'piece';
+                        piece.textContent = position[squareId];
+                        square.appendChild(piece);
+                    }
+                    
+                    // Highlight knight's possible moves
+                    if (squareId === 'c3' || squareId === 'a3' || squareId === 'd2') {
+                        square.classList.add('highlight');
+                    }
+                    
+                    // Target square
+                    if (squareId === 'd5') {
+                        square.classList.add('target');
+                    }
+                    
+                    board.appendChild(square);
+                }
+            }
+        }
+
+        function selectQuizOption(element, isCorrect) {
+            // Clear previous selections
+            document.querySelectorAll('.quiz-option').forEach(opt => {
+                opt.classList.remove('selected', 'correct', 'incorrect');
+            });
+            
+            element.classList.add('selected');
+            
+            // Show result after a short delay
+            setTimeout(() => {
+                if (isCorrect) {
+                    element.classList.add('correct');
+                    updateScore();
+                } else {
+                    element.classList.add('incorrect');
+                    // Show correct answer
+                    document.querySelectorAll('.quiz-option')[1].classList.add('correct');
+                }
+            }, 500);
+        }
+
+        function updateScore() {
+            const scoreElement = document.querySelector('.quiz-score');
+            scoreElement.textContent = 'Score: 1/3';
+        }
+
+        function showSolution() {
+            alert('Solution: Move Knight from b1 → c3 → d5 (capturing the pawn)');
+            // In real implementation, would animate the solution on the board
+        }
+
+        function resetChallenge() {
+            generateTutorialBoard();
+        }
+
+        function checkSolution() {
+            // In real implementation, would check if the user's moves are correct
+            showAchievement();
+        }
+
+        function showAchievement() {
+            document.getElementById('modal-overlay').classList.add('show');
+            document.getElementById('achievement-modal').classList.add('show');
+        }
+
+        function closeAchievement() {
+            document.getElementById('modal-overlay').classList.remove('show');
+            document.getElementById('achievement-modal').classList.remove('show');
+        }
+
+        function previousLesson() {
+            console.log('Navigate to previous lesson');
+            alert('Would navigate to Lesson 2: Board Setup & Pieces');
+        }
+
+        function nextLesson() {
+            console.log('Navigate to next lesson');
+            alert('Would navigate to Lesson 4: Special Rules');
+        }
+
+        // Initialize board on load
+        generateTutorialBoard();
+
+        // Simulate progress update
+        setTimeout(() => {
+            document.querySelector('.progress-fill').style.width = '37.5%';
+        }, 1000);
+    </script>
+</body>
+</html>
