@@ -1,7 +1,9 @@
-// common/api.js
+// common/api.js - Updated with your backend integration
 // API communication module for Los Alamos Chess
 
-let API_BASE = 'http://localhost:3000';
+let API_BASE = process.env.NODE_ENV === 'production' 
+    ? 'https://your-production-api.com/api' 
+    : 'http://localhost:3000/api';
 
 /**
  * Set the API base URL
@@ -21,7 +23,7 @@ export function getApiBase() {
 
 /**
  * Make an authenticated API request
- * @param {string} endpoint - API endpoint (e.g., '/api/auth/login')
+ * @param {string} endpoint - API endpoint (e.g., '/auth/login')
  * @param {Object} options - Fetch options
  * @returns {Promise<any>} Response data
  */
@@ -49,6 +51,7 @@ export async function apiRequest(endpoint, options = {}) {
     // Prepare fetch options
     const fetchOptions = {
         method: 'GET',
+        credentials: 'include', // Include cookies for refresh tokens
         ...options,
         headers
     };
@@ -58,28 +61,24 @@ export async function apiRequest(endpoint, options = {}) {
         
         const response = await fetch(url, fetchOptions);
         
-        // Handle different response types
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new APIError(
-                errorData.message || `HTTP ${response.status}: ${response.statusText}`,
-                response.status,
-                errorData
-            );
+        // Handle token expiration
+        if (response.status === 401 && token) {
+            console.log('Token expired, attempting refresh...');
+            const refreshSuccess = await refreshAccessToken();
+            if (refreshSuccess) {
+                // Retry the original request with new token
+                const newToken = localStorage.getItem('accessToken');
+                fetchOptions.headers['Authorization'] = `Bearer ${newToken}`;
+                const retryResponse = await fetch(url, fetchOptions);
+                return handleResponse(retryResponse, fetchOptions.method, url);
+            } else {
+                // Refresh failed, redirect to login
+                redirectToLogin();
+                throw new APIError('Authentication required', 401);
+            }
         }
         
-        // Parse response based on content type
-        const contentType = response.headers.get('content-type');
-        let data;
-        
-        if (contentType && contentType.includes('application/json')) {
-            data = await response.json();
-        } else {
-            data = await response.text();
-        }
-        
-        console.log(`✅ API Response: ${fetchOptions.method} ${url}`, data);
-        return data;
+        return handleResponse(response, fetchOptions.method, url);
         
     } catch (error) {
         console.error(`❌ API Error: ${fetchOptions.method} ${url}`, error);
@@ -94,6 +93,93 @@ export async function apiRequest(endpoint, options = {}) {
             0,
             { originalError: error }
         );
+    }
+}
+
+/**
+ * Handle API response
+ */
+async function handleResponse(response, method, url) {
+    if (!response.ok) {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch {
+            errorData = { message: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        throw new APIError(
+            errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+            response.status,
+            errorData
+        );
+    }
+    
+    // Parse response based on content type
+    const contentType = response.headers.get('content-type');
+    let data;
+    
+    if (contentType && contentType.includes('application/json')) {
+        data = await response.json();
+    } else {
+        data = await response.text();
+    }
+    
+    console.log(`✅ API Response: ${method} ${url}`, data);
+    return data;
+}
+
+/**
+ * Refresh access token using refresh token
+ */
+async function refreshAccessToken() {
+    try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) {
+            throw new Error('No refresh token available');
+        }
+
+        const response = await fetch(`${API_BASE}/auth/refresh`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ refreshToken })
+        });
+
+        if (!response.ok) {
+            throw new Error('Refresh failed');
+        }
+
+        const data = await response.json();
+        
+        // Store new access token
+        localStorage.setItem('accessToken', data.accessToken);
+        
+        console.log('✅ Token refreshed successfully');
+        return true;
+
+    } catch (error) {
+        console.error('❌ Token refresh failed:', error);
+        // Clear invalid tokens
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        return false;
+    }
+}
+
+/**
+ * Redirect to login page
+ */
+function redirectToLogin() {
+    // Clear tokens
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    
+    // Redirect to login
+    if (window.location.pathname !== '/login_page.html') {
+        window.location.href = '/login_page.html';
     }
 }
 
@@ -126,9 +212,31 @@ export class APIError extends Error {
 }
 
 /**
- * Authentication API calls
+ * Authentication API calls - Updated for your backend
  */
 export const auth = {
+    /**
+     * Register new user
+     * @param {Object} userData - User registration data
+     * @returns {Promise<Object>} Registration response
+     */
+    async register(userData) {
+        const response = await apiRequest('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify(userData)
+        });
+
+        // Store tokens if provided
+        if (response.accessToken) {
+            localStorage.setItem('accessToken', response.accessToken);
+        }
+        if (response.refreshToken) {
+            localStorage.setItem('refreshToken', response.refreshToken);
+        }
+
+        return response;
+    },
+    
     /**
      * Login user
      * @param {string} email - User email
@@ -136,30 +244,18 @@ export const auth = {
      * @returns {Promise<Object>} Login response with token
      */
     async login(email, password) {
-        return apiRequest('/api/auth/login', {
+        const response = await apiRequest('/auth/login', {
             method: 'POST',
             body: JSON.stringify({ email, password })
         });
-    },
-    
-    /**
-     * Register new user
-     * @param {Object} userData - User registration data
-     * @returns {Promise<Object>} Registration response
-     */
-    async register(userData) {
-        return apiRequest('/api/auth/register', {
-            method: 'POST',
-            body: JSON.stringify(userData)
-        });
-    },
-    
-    /**
-     * Validate current token
-     * @returns {Promise<Object>} Validation response
-     */
-    async validate() {
-        return apiRequest('/api/auth/validate');
+
+        // Store tokens
+        localStorage.setItem('accessToken', response.accessToken);
+        if (response.refreshToken) {
+            localStorage.setItem('refreshToken', response.refreshToken);
+        }
+
+        return response;
     },
     
     /**
@@ -167,36 +263,58 @@ export const auth = {
      * @returns {Promise<void>}
      */
     async logout() {
-        const response = await apiRequest('/api/auth/logout', {
-            method: 'POST'
-        });
-        
-        // Clear local storage
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        
-        return response;
+        try {
+            await apiRequest('/auth/logout', {
+                method: 'POST'
+            });
+        } catch (error) {
+            console.warn('Logout API call failed:', error.message);
+        } finally {
+            // Always clear local storage
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+        }
     },
     
     /**
-     * Refresh access token
-     * @returns {Promise<Object>} New token data
+     * Get current user profile
+     * @returns {Promise<Object>} User profile
      */
-    async refresh() {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) {
-            throw new APIError('No refresh token available', 401);
+    async getProfile() {
+        return apiRequest('/auth/me');
+    },
+    
+    /**
+     * Validate current token
+     * @returns {Promise<Object>} Validation response
+     */
+    async validate() {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+            throw new APIError('No access token', 401);
         }
-        
-        return apiRequest('/api/auth/refresh', {
+
+        return apiRequest('/auth/validate', {
             method: 'POST',
-            body: JSON.stringify({ refreshToken })
+            body: JSON.stringify({ token })
+        });
+    },
+    
+    /**
+     * Request password reset
+     * @param {string} email - User email
+     * @returns {Promise<Object>} Reset response
+     */
+    async requestPasswordReset(email) {
+        return apiRequest('/auth/password-reset', {
+            method: 'POST',
+            body: JSON.stringify({ email })
         });
     }
 };
 
 /**
- * Game API calls
+ * Game API calls - Updated for your backend
  */
 export const game = {
     /**
@@ -205,7 +323,7 @@ export const game = {
      * @returns {Promise<Object>} Game data
      */
     async create(gameConfig = {}) {
-        return apiRequest('/api/games', {
+        return apiRequest('/games', {
             method: 'POST',
             body: JSON.stringify(gameConfig)
         });
@@ -217,17 +335,17 @@ export const game = {
      * @returns {Promise<Object>} Game data
      */
     async get(gameId) {
-        return apiRequest(`/api/games/${gameId}`);
+        return apiRequest(`/games/${gameId}`);
     },
     
     /**
      * Make a move
      * @param {string} gameId - Game ID
-     * @param {Object} move - Move data (from, to, piece)
+     * @param {Object} move - Move data (uci, from, to)
      * @returns {Promise<Object>} Move response
      */
     async makeMove(gameId, move) {
-        return apiRequest(`/api/games/${gameId}/moves`, {
+        return apiRequest(`/games/${gameId}/moves`, {
             method: 'POST',
             body: JSON.stringify(move)
         });
@@ -239,7 +357,7 @@ export const game = {
      * @returns {Promise<Array>} Move history
      */
     async getHistory(gameId) {
-        return apiRequest(`/api/games/${gameId}/history`);
+        return apiRequest(`/games/${gameId}/history`);
     },
     
     /**
@@ -248,7 +366,7 @@ export const game = {
      * @returns {Promise<Object>} Game result
      */
     async resign(gameId) {
-        return apiRequest(`/api/games/${gameId}/resign`, {
+        return apiRequest(`/games/${gameId}/resign`, {
             method: 'POST'
         });
     },
@@ -259,142 +377,80 @@ export const game = {
      * @returns {Promise<Object>} Draw offer response
      */
     async offerDraw(gameId) {
-        return apiRequest(`/api/games/${gameId}/draw`, {
+        return apiRequest(`/games/${gameId}/draw`, {
             method: 'POST'
-        });
-    },
-    
-    /**
-     * Accept/decline draw
-     * @param {string} gameId - Game ID
-     * @param {boolean} accept - Accept or decline
-     * @returns {Promise<Object>} Draw response
-     */
-    async respondDraw(gameId, accept) {
-        return apiRequest(`/api/games/${gameId}/draw/respond`, {
-            method: 'POST',
-            body: JSON.stringify({ accept })
         });
     }
 };
 
 /**
- * Tournament API calls
+ * Check if user is authenticated
+ * @returns {boolean} Authentication status
  */
-export const tournament = {
-    /**
-     * Create tournament
-     * @param {Object} tournamentData - Tournament configuration
-     * @returns {Promise<Object>} Tournament data
-     */
-    async create(tournamentData) {
-        return apiRequest('/api/tournaments', {
-            method: 'POST',
-            body: JSON.stringify(tournamentData)
-        });
-    },
-    
-    /**
-     * Get tournament by ID
-     * @param {string} tournamentId - Tournament ID
-     * @returns {Promise<Object>} Tournament data
-     */
-    async get(tournamentId) {
-        return apiRequest(`/api/tournaments/${tournamentId}`);
-    },
-    
-    /**
-     * Join tournament
-     * @param {string} tournamentId - Tournament ID
-     * @returns {Promise<Object>} Join response
-     */
-    async join(tournamentId) {
-        return apiRequest(`/api/tournaments/${tournamentId}/join`, {
-            method: 'POST'
-        });
-    },
-    
-    /**
-     * Leave tournament
-     * @param {string} tournamentId - Tournament ID
-     * @returns {Promise<Object>} Leave response
-     */
-    async leave(tournamentId) {
-        return apiRequest(`/api/tournaments/${tournamentId}/leave`, {
-            method: 'POST'
-        });
-    },
-    
-    /**
-     * Get active tournaments
-     * @returns {Promise<Array>} List of tournaments
-     */
-    async getActive() {
-        return apiRequest('/api/tournaments/active');
+export function isAuthenticated() {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return false;
+
+    try {
+        // Basic JWT expiration check (without verification)
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.exp * 1000 > Date.now();
+    } catch {
+        return false;
     }
-};
+}
 
 /**
- * User API calls
+ * Get current user from token
+ * @returns {Object|null} User data or null
  */
-export const user = {
-    /**
-     * Get user profile
-     * @param {string} userId - User ID (optional, defaults to current user)
-     * @returns {Promise<Object>} User profile
-     */
-    async getProfile(userId = 'me') {
-        return apiRequest(`/api/users/${userId}`);
-    },
-    
-    /**
-     * Update user profile
-     * @param {Object} profileData - Profile update data
-     * @returns {Promise<Object>} Updated profile
-     */
-    async updateProfile(profileData) {
-        return apiRequest('/api/users/me', {
-            method: 'PUT',
-            body: JSON.stringify(profileData)
-        });
-    },
-    
-    /**
-     * Get user statistics
-     * @param {string} userId - User ID (optional, defaults to current user)
-     * @returns {Promise<Object>} User statistics
-     */
-    async getStats(userId = 'me') {
-        return apiRequest(`/api/users/${userId}/stats`);
-    },
-    
-    /**
-     * Get user's friends
-     * @returns {Promise<Array>} Friends list
-     */
-    async getFriends() {
-        return apiRequest('/api/users/me/friends');
-    },
-    
-    /**
-     * Send friend request
-     * @param {string} username - Username to send request to
-     * @returns {Promise<Object>} Request response
-     */
-    async sendFriendRequest(username) {
-        return apiRequest('/api/users/me/friends/request', {
-            method: 'POST',
-            body: JSON.stringify({ username })
-        });
+export function getCurrentUser() {
+    const token = localStorage.getItem('accessToken');
+    if (!token) return null;
+
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return {
+            id: payload.sub,
+            username: payload.name,
+            roles: payload.roles || ['player'],
+            seat: payload.seat
+        };
+    } catch {
+        return null;
     }
-};
+}
 
 /**
- * Health check
- * @returns {Promise<Object>} Server health status
+ * Initialize API authentication check
  */
-export async function healthCheck() {
-    return apiRequest('/api/health');
+export async function initializeAuth() {
+    const token = localStorage.getItem('accessToken');
+    
+    if (token && isAuthenticated()) {
+        try {
+            // Validate token with backend
+            await auth.validate();
+            console.log('✅ Authentication initialized');
+            return true;
+        } catch (error) {
+            console.log('❌ Token validation failed, attempting refresh...');
+            return await refreshAccessToken();
+        }
+    } else if (localStorage.getItem('refreshToken')) {
+        console.log('🔄 No valid access token, attempting refresh...');
+        return await refreshAccessToken();
+    }
+    
+    console.log('❌ No valid authentication found');
+    return false;
+}
+
+// Auto-initialize authentication when module loads
+if (typeof window !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', async () => {
+        await initializeAuth();
+    });
 }
 
 /**
@@ -407,7 +463,7 @@ export default {
     APIError,
     auth,
     game,
-    tournament,
-    user,
-    healthCheck
+    isAuthenticated,
+    getCurrentUser,
+    initializeAuth
 };

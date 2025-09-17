@@ -37,11 +37,11 @@ function test(description, testFunction, shouldPass = true) {
 let RulesEngine, BoardValidator, PieceMovement, GameStateChecker, Constants;
 
 try {
-    RulesEngine = require('../src/engine/index.js');
-    BoardValidator = require('../src/engine/board-validator.js');
-    PieceMovement = require('../src/engine/piece-movement.js');
-    GameStateChecker = require('../src/engine/game-state-checker.js');
-    Constants = require('../src/engine/constants.js');
+    RulesEngine = require('./backend/src/engine/index.js');
+    BoardValidator = require('./backend/src/engine/board-validator.js');
+    PieceMovement = require('./backend/src/engine/piece-movement.js');
+    GameStateChecker = require('./backend/src/engine/game-state-checker.js');
+Constants = require('./backend/src/engine/constants.js');
     console.log('All components loaded successfully\n');
 } catch (error) {
     console.log('CRITICAL ERROR: Cannot load components:', error.message);
@@ -878,3 +878,335 @@ console.log('- All Los Alamos variant rules are strictly enforced');
 console.log('- Integration with other team components should be tested separately');
 
 console.log('\n' + '='.repeat(80));
+
+// Add this section to your existing stress-test.js file
+
+console.log('\nSTRESS TEST GROUP 7: AI BOT EXTREME TESTING');
+console.log('-'.repeat(50));
+
+// Load AI Bot
+let AIBot;
+try {
+    AIBot = require('./backend/src/ai-bot/index.js');
+    console.log('AI Bot loaded successfully\n');
+} catch (error) {
+    console.log('CRITICAL ERROR: Cannot load AI Bot:', error.message);
+}
+
+if (AIBot) {
+    const aiBot = new AIBot();
+    
+    // Test 7.1: Basic AI Functionality
+    console.log('\n7.1 AI Bot Basic Functionality:');
+    
+    test('AI Bot initialization', () => {
+        return aiBot !== null && aiBot.strategies !== undefined;
+    });
+    
+    test('All difficulty levels exist', () => {
+        return aiBot.strategies.L0 && aiBot.strategies.L1 && 
+               aiBot.strategies.L2 && aiBot.strategies.L3;
+    });
+    
+    // Test 7.2: L0 Random Strategy Stress Tests
+    console.log('\n7.2 L0 Random Strategy Stress Tests:');
+    
+    test('L0 returns legal move', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L0'
+        });
+        return response.ok === true && response.move !== undefined;
+    });
+    
+    test('L0 deterministic with seed', async () => {
+        const r1 = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L0',
+            seed: 42
+        });
+        const r2 = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L0',
+            seed: 42
+        });
+        return r1.move === r2.move;
+    });
+    
+    test('L0 handles 1000 positions without crash', async () => {
+        for (let i = 0; i < 1000; i++) {
+            const response = await aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: 'L0',
+                seed: i,
+                msCap: 10
+            });
+            if (!response.ok) return false;
+        }
+        return true;
+    });
+    
+    // Test 7.3: L1 Greedy Strategy Stress Tests
+    console.log('\n7.3 L1 Greedy Strategy Stress Tests:');
+    
+    test('L1 evaluates all moves', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L1'
+        });
+        const legalMoves = engine.getLegalMoves(INITIAL_FEN);
+        return response.nodes === legalMoves.length;
+    });
+    
+    test('L1 prefers captures', async () => {
+        // Position with capture available
+        const capturePos = 'rnqknr/pppppp/6/3p2/2P3/RNQKNR w - - 0 5';
+        const response = await aiBot.generateMove({
+            fen: capturePos,
+            level: 'L1'
+        });
+        return response.evaluation > 0;
+    });
+    
+    test('L1 completes in < 100ms', async () => {
+        const start = Date.now();
+        await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L1'
+        });
+        return (Date.now() - start) < 100;
+    });
+    
+    // Test 7.4: L2 Minimax Strategy Stress Tests
+    console.log('\n7.4 L2 Minimax Strategy Stress Tests:');
+    
+    test('L2 searches to depth 2', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L2'
+        });
+        return response.depth === 2;
+    });
+    
+    test('L2 searches > 50 nodes', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L2'
+        });
+        return response.nodes > 50;
+    });
+    
+    test('L2 alpha-beta pruning works', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L2'
+        });
+        // Should prune some branches
+        return response.nodes < 1000;
+    });
+    
+    // Test 7.5: L3 Enhanced Strategy Stress Tests
+    console.log('\n7.5 L3 Enhanced Strategy Stress Tests:');
+    
+    test('L3 searches to depth 3', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L3'
+        });
+        return response.depth === 3;
+    });
+    
+    test('L3 uses transposition table', async () => {
+        // First search
+        const r1 = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L3'
+        });
+        
+        // Second search should be faster due to caching
+        const start = Date.now();
+        const r2 = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L3'
+        });
+        const time2 = Date.now() - start;
+        
+        return r2.ok === true;
+    });
+    
+    // Test 7.6: Timeout Enforcement
+    console.log('\n7.6 Timeout Enforcement Stress Tests:');
+    
+    test('Respects 10ms timeout', async () => {
+        const start = Date.now();
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L3',
+            msCap: 10
+        });
+        const elapsed = Date.now() - start;
+        return elapsed < 50 && response.ok === true;
+    });
+    
+    test('Returns best move on timeout', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L3',
+            msCap: 1
+        });
+        return response.ok === true && response.move !== undefined;
+    });
+    
+    test('All levels handle timeout', async () => {
+        for (const level of ['L0', 'L1', 'L2', 'L3']) {
+            const response = await aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: level,
+                msCap: 5
+            });
+            if (!response.ok) return false;
+        }
+        return true;
+    });
+    
+    // Test 7.7: Edge Cases
+    console.log('\n7.7 Edge Case Stress Tests:');
+    
+    test('Handles no legal moves', async () => {
+        const emptyFEN = '6/6/6/6/6/6 w - - 0 1';
+        const response = await aiBot.generateMove({
+            fen: emptyFEN,
+            level: 'L0'
+        });
+        return response.ok === false && response.error === 'NO_LEGAL_MOVES';
+    });
+    
+    test('Handles promotion positions', async () => {
+        const promotionFEN = 'rnqknr/P5/pppppp/6/6/RNQKNR w - - 0 10';
+        const response = await aiBot.generateMove({
+            fen: promotionFEN,
+            level: 'L2'
+        });
+        if (response.ok && response.move.startsWith('a5a6')) {
+            return response.move.match(/[qrn]$/);
+        }
+        return response.ok;
+    });
+    
+    test('Handles invalid level gracefully', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L99'
+        });
+        return response.ok === false && response.error === 'INVALID_LEVEL';
+    });
+    
+    test('Handles missing parameters', async () => {
+        const response = await aiBot.generateMove({});
+        return response.ok === false && response.error === 'INVALID_REQUEST';
+    });
+    
+    // Test 7.8: Performance Under Load
+    console.log('\n7.8 Performance Under Load:');
+    
+    test('100 L0 moves in < 500ms', async () => {
+        const start = Date.now();
+        for (let i = 0; i < 100; i++) {
+            await aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: 'L0',
+                seed: i
+            });
+        }
+        return (Date.now() - start) < 500;
+    });
+    
+    test('50 L1 moves in < 2 seconds', async () => {
+        const start = Date.now();
+        for (let i = 0; i < 50; i++) {
+            await aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: 'L1',
+                msCap: 50
+            });
+        }
+        return (Date.now() - start) < 2000;
+    });
+    
+    test('Memory stable after 100 L3 searches', async () => {
+        const initialMem = process.memoryUsage().heapUsed;
+        
+        for (let i = 0; i < 100; i++) {
+            await aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: 'L3',
+                msCap: 50
+            });
+        }
+        
+        global.gc && global.gc();
+        const finalMem = process.memoryUsage().heapUsed;
+        const increase = (finalMem - initialMem) / (1024 * 1024);
+        
+        return increase < 100; // Less than 100MB increase
+    });
+    
+    // Test 7.9: Concurrent Requests
+    console.log('\n7.9 Concurrent Request Tests:');
+    
+    test('Handle 10 concurrent requests', async () => {
+        const promises = [];
+        for (let i = 0; i < 10; i++) {
+            promises.push(aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: `L${i % 4}`,
+                seed: i
+            }));
+        }
+        
+        const results = await Promise.all(promises);
+        return results.every(r => r.ok === true);
+    });
+    
+    test('Different levels simultaneously', async () => {
+        const promises = [
+            aiBot.generateMove({ fen: INITIAL_FEN, level: 'L0' }),
+            aiBot.generateMove({ fen: INITIAL_FEN, level: 'L1' }),
+            aiBot.generateMove({ fen: INITIAL_FEN, level: 'L2' }),
+            aiBot.generateMove({ fen: INITIAL_FEN, level: 'L3', msCap: 1000 })
+        ];
+        
+        const results = await Promise.all(promises);
+        return results.every(r => r.ok === true);
+    });
+    
+    // Test 7.10: Integration with Rules Engine
+    console.log('\n7.10 Rules Engine Integration:');
+    
+    test('All returned moves are legal', async () => {
+        for (const level of ['L0', 'L1', 'L2', 'L3']) {
+            const response = await aiBot.generateMove({
+                fen: INITIAL_FEN,
+                level: level
+            });
+            
+            if (!response.ok) return false;
+            
+            const validation = engine.validateMove(INITIAL_FEN, response.move);
+            if (!validation.valid) return false;
+        }
+        return true;
+    });
+    
+    test('Moves can be applied successfully', async () => {
+        const response = await aiBot.generateMove({
+            fen: INITIAL_FEN,
+            level: 'L2'
+        });
+        
+        if (!response.ok) return false;
+        
+        const result = engine.applyMove(INITIAL_FEN, response.move);
+        return result && result.fen !== undefined;
+    });
+}

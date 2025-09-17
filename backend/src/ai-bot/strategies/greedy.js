@@ -38,26 +38,36 @@ class GreedyStrategy {
 
     evaluateMove(fen, move) {
         const result = this.rulesEngine.applyMove(fen, move);
+        if (!result || !result.fen) {
+            return -Infinity; // Invalid move
+        }
+        
         let value = 0;
         
         // Bonus for captures
         if (result.capturedPiece) {
             const pieceValues = { 'p': 1, 'n': 3, 'r': 5, 'q': 9, 'k': 1000 };
-            value += pieceValues[result.capturedPiece.toLowerCase()];
+            const capturedPieceType = result.capturedPiece.toLowerCase();
+            value += pieceValues[capturedPieceType] || 0;
         }
         
         // Bonus for checks
-        if (result.flags.check) {
+        if (result.flags && result.flags.check) {
             value += 0.5;
         }
         
         // Huge bonus for checkmate
-        if (result.flags.checkmate) {
+        if (result.flags && result.flags.checkmate) {
             value += 10000;
         }
         
         // Evaluate board position
-        value += this.evaluator.evaluatePosition(result.fen);
+        try {
+            value += this.evaluator.evaluatePosition(result.fen);
+        } catch (error) {
+            // If evaluator fails, just use the capture/check bonuses
+            console.warn('Evaluator failed for position:', result.fen);
+        }
         
         return value;
     }

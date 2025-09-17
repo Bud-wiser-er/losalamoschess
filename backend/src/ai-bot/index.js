@@ -79,7 +79,7 @@ class AIBot {
                 move: moveResult.move,
                 evaluation: moveResult.evaluation,
                 depth: moveResult.depth,
-                nodesSearched: moveResult.nodes,
+                nodes: moveResult.nodes,  // Fixed: was nodesSearched
                 timeMs: endTime - startTime
             };
         } catch (error) {
