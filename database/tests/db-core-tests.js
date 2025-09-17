@@ -58,55 +58,97 @@ function registerCoreTests(framework) {
         }
     );
 
-    // DB-02: Duplicate Email Prevention
+   // DB-02: Duplicate Email Prevention (FIXED - Better Isolation)
     framework.addTest(
         'DB-02',
         'Duplicate email: createUser(duplicate) - Error thrown, no row created',
         async (client) => {
-            const email = `duplicate_${Date.now()}@example.com`;
+            const timestamp = Date.now();
+            const randomSuffix = Math.random().toString(36).substring(7);
+            const email = `duplicate_test_${timestamp}_${randomSuffix}@example.com`;
             
-            // Create first user
             const insertQuery = `
                 INSERT INTO users (username, email, password_hash, rating)
                 VALUES ($1, $2, $3, $4)
                 RETURNING id
             `;
             
-            await client.query(insertQuery, [
-                'user1',
+            // Create first user successfully
+            const firstUser = await client.query(insertQuery, [
+                `user1_${timestamp}_${randomSuffix}`,
                 email,
                 await bcrypt.hash('password123', 12),
                 1200
             ]);
 
-            // Count users before duplicate attempt
+            // Verify first user was created
+            if (firstUser.rows.length === 0) {
+                return { success: false, message: 'Failed to create first user', expected: 'user created', actual: 'no user' };
+            }
+
+            // Count users with this email before duplicate attempt
             const countBefore = await client.query('SELECT COUNT(*) as count FROM users WHERE email = $1', [email]);
             
-            // Attempt to create duplicate user
+            // Attempt to create duplicate user - this should fail
+            let constraintViolated = false;
+            let errorType = '';
+            
             try {
                 await client.query(insertQuery, [
-                    'user2',
-                    email, // Same email
+                    `user2_${timestamp}_${randomSuffix}`, // Different username
+                    email, // Same email - should cause constraint violation
                     await bcrypt.hash('password456', 12),
                     1400
                 ]);
                 
-                return { success: false, message: 'Should have thrown constraint violation error', expected: 'constraint error', actual: 'no error' };
-            } catch (error) {
-                // Verify constraint error was thrown
-                if (!error.message.includes('unique_email') && !error.code === '23505') {
-                    return { success: false, message: 'Wrong error type thrown', expected: 'unique constraint error', actual: error.message };
-                }
-
-                // Verify no duplicate row was created
-                const countAfter = await client.query('SELECT COUNT(*) as count FROM users WHERE email = $1', [email]);
+                // If we get here, the constraint didn't work
+                return { 
+                    success: false, 
+                    message: 'Duplicate email was allowed (should have been blocked)', 
+                    expected: 'unique constraint error', 
+                    actual: 'duplicate email accepted' 
+                };
                 
-                return TestFramework.assert.equals(
-                    parseInt(countAfter.rows[0].count), 
-                    parseInt(countBefore.rows[0].count),
-                    'User count should remain unchanged after duplicate attempt'
-                );
+            } catch (error) {
+                constraintViolated = true;
+                errorType = error.code;
+                
+                // Check if it's the right type of error (unique violation)
+                const isUniqueViolation = error.code === '23505' || 
+                                        error.message.includes('unique_email') ||
+                                        error.message.includes('duplicate key');
+                
+                if (!isUniqueViolation) {
+                    return { 
+                        success: false, 
+                        message: 'Wrong error type for duplicate email', 
+                        expected: 'unique constraint violation (23505)', 
+                        actual: `${error.code}: ${error.message}` 
+                    };
+                }
             }
+
+            // Verify no duplicate row was created
+            const countAfter = await client.query('SELECT COUNT(*) as count FROM users WHERE email = $1', [email]);
+            
+            const beforeCount = parseInt(countBefore.rows[0].count);
+            const afterCount = parseInt(countAfter.rows[0].count);
+            
+            // Clean up the test user
+            await client.query('DELETE FROM users WHERE email = $1', [email]);
+            
+            if (!constraintViolated) {
+                return { success: false, message: 'No constraint violation occurred', expected: 'constraint error', actual: 'no error' };
+            }
+            
+            if (afterCount !== beforeCount) {
+                return { success: false, message: 'User count changed after failed insert', expected: beforeCount, actual: afterCount };
+            }
+            
+            return { 
+                success: true, 
+                message: `Duplicate email correctly rejected (error code: ${errorType})` 
+            };
         }
     );
 
