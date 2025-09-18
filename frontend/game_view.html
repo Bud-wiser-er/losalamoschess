@@ -548,9 +548,11 @@
     <!-- Game Header -->
     <div class="game-header">
         <div class="header-left">
-            <button class="back-btn" onclick="goBack()">
-                ← Back to Lobby
-            </button>
+            <a href="dashboard_page.html">   
+                <button class="back-btn" onclick="goBack()">
+                    ← Back to Lobby
+                </button>
+            </a>
             <div>
                 <div class="game-mode">Ranked Match vs AI Level 2</div>
                 <div class="game-status">● Game in Progress</div>
@@ -892,7 +894,7 @@
 
         function goBack() {
             console.log('Returning to lobby');
-            alert('Would navigate back to main dashboard');
+            // alert('Would navigate back to main dashboard');
         }
 
         function offerDraw() {

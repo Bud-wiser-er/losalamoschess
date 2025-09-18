@@ -56,8 +56,9 @@
         .logo-text {
             font-size: 24px;
             font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
+            background: linear-gradient(135deg, #4facfe 0%, #8e44ad 100%);
+            background-clip: text;           /* standard property */
+            -webkit-background-clip: text;   /* for Chrome, Safari */
             -webkit-text-fill-color: transparent;
         }
 
@@ -76,6 +77,35 @@
 
         .nav-menu a:hover, .nav-menu a.active {
             color: #667eea;
+        }
+
+        .navbar .logout a {
+            margin-left: 15px;
+            text-decoration: none;
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .profile-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .username {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .logout-btn {
+            text-decoration: none;
+            color: #e74c3c;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .logout-btn:hover {
+            color: #c0392b;
         }
 
         /* Main Container */
@@ -668,13 +698,19 @@
             
             <nav>
                 <ul class="nav-menu">
-                    <li><a href="#play">Play</a></li>
-                    <li><a href="#tournaments">Tournaments</a></li>
-                    <li><a href="#learn" class="active">Learn</a></li>
-                    <li><a href="#social">Friends</a></li>
-                    <li><a href="#stats">Statistics</a></li>
+                    <li><a href="dashboard_page.html">Home</a></li>
+                    <li><a href="game_view.html">Play</a></li>
+                    <li><a href="tournament_setup.html">Tournaments</a></li>
+                    <li><a href="tutorial_page.html" class="active">Learn</a></li>
+                    <li><a href="#social">Friends</a></li> 
                 </ul>
             </nav>
+
+            <!-- Profile / Logout -->
+            <div class="profile-section">
+                <span class="username">John Doe</span>
+                <a href="login_page.html" class="logout-btn">Logout</a>
+            </div>
         </div>
     </header>
 
