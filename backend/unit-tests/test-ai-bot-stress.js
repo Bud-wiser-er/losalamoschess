@@ -95,7 +95,7 @@ async function runStressTests() {
 
     console.log('\n1.1 Malformed Input Stress Tests:');
     
-    // Test extreme input variations
+// Test extreme input variations
     const extremeInputs = [
         null, undefined, '', 0, -1, NaN, Infinity, -Infinity,
         {}, [], true, false, 'invalid', '🎯', 'very long string'.repeat(1000)
@@ -111,12 +111,12 @@ async function runStressTests() {
                 });
                 return result.ok === false;
             } catch (error) {
-                return true; // Acceptable to throw for extreme inputs
+                return true; //throw for extreme inputs
             }
         });
     }
 
-    // Test malformed FEN strings
+    // Test malformed FEN strings, eahc of these are incorrect FEN
     const badFENs = [
         'invalid',
         'rnqknr/pppppp/6/6/PPPPPP', // Missing parts

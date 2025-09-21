@@ -97,7 +97,22 @@ try {
         test('Queen d4-d6 (vertical like rook)', movement.isValidMove(whiteQueen, { from: 'd4', to: 'd6' }, mockBoard));
         test('Queen d4-f4 (horizontal like rook)', movement.isValidMove(whiteQueen, { from: 'd4', to: 'f4' }, mockBoard));
         test('Queen d4-f6 (diagonal like bishop)', movement.isValidMove(whiteQueen, { from: 'd4', to: 'f6' }, mockBoard));
-        test('Queen d4-b2 (diagonal like bishop)', movement.isValidMove(whiteQueen, { from: 'd4', to: 'b2' }, mockBoard));
+        
+        // FIXED: Use a clear path for the Queen diagonal test
+        // Create a test board without the blocking piece at c3
+        const clearMockBoard = {
+            getPieceAt: function(square) {
+                // Enemy pieces for capture testing (but not c3 to clear the path)
+                if (square === 'd3') return { type: 'knight', color: 'black' };
+                if (square === 'e3') return { type: 'rook', color: 'white' }; // Same color - blocking
+                
+                // Path blocking for rook/queen tests
+                if (square === 'a3') return { type: 'pawn', color: 'white' };
+                
+                return null; // Empty square
+            }
+        };
+        test('Queen d4-b2 (diagonal like bishop)', movement.isValidMove(whiteQueen, { from: 'd4', to: 'b2' }, clearMockBoard));
         
         // Invalid queen moves
         test('Queen d4-e6 rejected (not straight/diagonal)', movement.isValidMove(whiteQueen, { from: 'd4', to: 'e6' }, mockBoard) === false);
@@ -121,8 +136,16 @@ try {
         // Test 6: Capture Rules
         console.log('\nGroup 6: Capture Rules');
         
-        // Can capture enemy pieces
-        test('Can capture enemy piece', movement.isValidMove(whiteKnight, { from: 'b1', to: 'd3' }, mockBoard)); // d3 has black knight
+        // FIXED: Use a valid knight move to test capturing enemy pieces
+        // Knight c1 can capture the black pawn at b3 with a valid L-shaped move
+        const captureTestBoard = {
+            getPieceAt: function(square) {
+                if (square === 'b3') return { type: 'pawn', color: 'black' }; // Enemy piece to capture
+                if (square === 'e3') return { type: 'rook', color: 'white' }; // Same color - blocking
+                return null; // Empty square
+            }
+        };
+        test('Can capture enemy piece', movement.isValidMove(whiteKnight, { from: 'c1', to: 'b3' }, captureTestBoard)); // c1-b3 is valid L-shape
         
         // Cannot capture own pieces
         test('Cannot capture own piece', movement.isValidMove(whiteRook, { from: 'd4', to: 'e3' }, mockBoard) === false); // e3 has white rook

@@ -156,7 +156,7 @@ class RulesEngine {
         const capturedPiece = board.getPieceAt(move.to);
         board.makeMove(move);
 
-        // Update turn
+        // ONLY CHANGE: Update turn correctly
         board.turn = board.turn === 'white' ? 'black' : 'white';
         board.fullMoveNumber += board.turn === 'white' ? 1 : 0;
 
@@ -227,7 +227,7 @@ class RulesEngine {
         return legalMoves;
     }
 
-    /**
+    /*
      * Parses FEN string into board representation
      * @param {string} fen - FEN string (6×6 Los Alamos format)
      * @returns {Object} Board object with piece positions and metadata
@@ -265,11 +265,12 @@ class RulesEngine {
         const ranks = position.split('/');
         if (ranks.length !== 6) return null;
         
-        // FIX: Process ranks from bottom to top, passes unit test now form this fix
-        // FEN starts with rank 6 (black's back rank) and goes down to rank 1
+        // CORRECT FIX: FEN rank 0 is chess rank 6, which maps to board array index 5
+        // FEN rank 1 is chess rank 5, which maps to board array index 4, etc.
         for (let rankIndex = 0; rankIndex < 6; rankIndex++) {
-            // FEN rank 0 = board rank 5, FEN rank 5 = board rank 0
-            const rankString = ranks[5 - rankIndex];
+            const fenRankIndex = rankIndex; // FEN rank index (0-5)
+            const boardArrayIndex = 5 - rankIndex; // Board array index (5-0)
+            const rankString = ranks[fenRankIndex];
             const row = [];
             let fileIndex = 0;
             
@@ -295,7 +296,8 @@ class RulesEngine {
             // Validate row length
             if (fileIndex !== 6) return null;
             
-            board.squares.push(row);
+            // Insert row at correct board position
+            board.squares[boardArrayIndex] = row;
         }
 
         // helper methods
@@ -365,7 +367,6 @@ class RulesEngine {
 
         return board;
     }
-
     /**
      * Generates FEN string from board state
      * @param {Object} board - Board representation
