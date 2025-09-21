@@ -47,13 +47,14 @@ try {
             test('Board has makeMove method', typeof board.makeMove === 'function');
             test('Board has clone method', typeof board.clone === 'function');
             
+            // not normal chess so its at d1 not e1 like i assumed prevosuly
             // Test helper methods work
             if (typeof board.getPieceAt === 'function') {
-                const piece = board.getPieceAt('e1');
+                const piece = board.getPieceAt('d1');
                 test('Can get piece at e1', piece !== null);
                 if (piece) {
-                    test('King at e1 is correct type', piece.type === 'king');
-                    test('King at e1 is white', piece.color === 'white');
+                    test('King at d1 is correct type', piece.type === 'king');
+                    test('King at d1 is white', piece.color === 'white');
                 }
             }
         }
