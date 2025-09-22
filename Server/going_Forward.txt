@@ -1,0 +1,4 @@
+I am still having quite a few port conflicts 
+
+http://localhost:5000/health checkup on server from browser just print a portion of the json file
+
