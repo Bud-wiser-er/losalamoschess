@@ -24,11 +24,11 @@ const colors = {
 function printBanner() {
     console.log(colors.cyan + colors.bright);
     console.log('╔═══════════════════════════════════════════════════════════════╗');
-    console.log('║                    LOS ALAMOS CHESS                          ║');
+    console.log('║                    LOS ALAMOS CHESS                           ║');
     console.log('║                DATABASE UNIT TEST SUITE                       ║');
     console.log('║                                                               ║');
-    console.log('║  EPE321 Software Engineering - Group 14                      ║');
-    console.log('║  Database & Persistence Testing (Arno Meyer)                 ║');
+    console.log('║  EPE321 Software Engineering - Group 14                       ║');
+    console.log('║  Database & Persistence Testing (Arno Meyer)                  ║');
     console.log('╚═══════════════════════════════════════════════════════════════╝');
     console.log(colors.reset);
 }
