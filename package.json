@@ -4,7 +4,7 @@
   "description": "Los Alamos Chess Platform - Backend Game Logic",
   "private": true,
   "type": "commonjs",
-  "main": "src/engine/index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node src/cli/main_entry_index.js",
     "dev": "nodemon src/cli/main_entry_index.js",
@@ -19,6 +19,7 @@
     "test:integration": "npm run test:auth && npm run test:api",
     "test:complete": "npm run test:auth && npm run test:api && npm run test",
     "test:byron:file-loading": "node backend/unit-tests/test-file-loading.js",
+    "test:server":"node security_server_tester.js",
     "test:byron:board-validator": "node backend/unit-tests/test-board-validator.js",
     "test:byron:piece-movement": "node backend/unit-tests/test-piece-movement.js",
     "test:byron:rules-engine": "node backend/unit-tests/test-rules-engine.js",

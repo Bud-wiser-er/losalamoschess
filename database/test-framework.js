@@ -27,7 +27,7 @@ class TestFramework {
         this.pool = new Pool({
             user: process.env.DB_USER || 'postgres',
             host: process.env.DB_HOST || 'localhost',
-            database: process.env.DB_NAME || 'losalamos_chess',
+            database: process.env.DB_NAME || 'los_alamos_chess',
             password: process.env.DB_PASSWORD,
             port: parseInt(process.env.DB_PORT) || 5432,
             max: 5 // Limit connections for testing
@@ -97,7 +97,7 @@ class TestFramework {
             
             // For tests that expect constraint violations, don't use transactions
             const expectsConstraintViolation = test.id === 'DB-02' || test.id === 'DB-08' || 
-                                             test.id === 'DB-11' || test.id === 'DB-14';
+                                   test.id === 'DB-09' || test.id === 'DB-11' || test.id === 'DB-14';
             
             let result;
             
