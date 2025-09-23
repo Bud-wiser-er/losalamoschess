@@ -1,11 +1,12 @@
 /*
  * Author: Byron Norval
- * Last Update: 15/09/2025
+ * Last Update: 21/09/2025
  * Title: AI Bot for Los Alamos Chess
  * Description: Main AI Bot class with L0-L3 difficulty levels
  */
 
 const RulesEngine = require('../engine/index');
+const BoardValidator = require('../engine/board-validator');
 const RandomStrategy = require('./strategies/random');
 const GreedyStrategy = require('./strategies/greedy');
 const MinimaxStrategy = require('./strategies/minimax');
@@ -14,6 +15,7 @@ const EnhancedStrategy = require('./strategies/enhanced');
 class AIBot {
     constructor() {
         this.rulesEngine = new RulesEngine();
+        this.validator = new BoardValidator();
         this.strategies = {
             'L0': new RandomStrategy(this.rulesEngine),
             'L1': new GreedyStrategy(this.rulesEngine),
@@ -34,7 +36,7 @@ class AIBot {
     async generateMove(request) {
         const { fen, level, msCap = 5000, seed } = request;
         
-        // Validate request
+        // Validate request parameters
         if (!fen || !level) {
             return {
                 ok: false,
@@ -48,6 +50,25 @@ class AIBot {
                 ok: false,
                 error: 'INVALID_LEVEL',
                 details: `Invalid difficulty level: ${level}. Use L0, L1, L2, or L3`
+            };
+        }
+        
+        // CRITICAL FIX: Validate FEN string before processing
+        if (!this.validator.isValidFEN(fen)) {
+            return {
+                ok: false,
+                error: 'INVALID_FEN',
+                details: 'The provided FEN string is not valid for Los Alamos Chess'
+            };
+        }
+        
+        // Try to parse the FEN to ensure it's actually usable
+        const board = this.rulesEngine.parseFEN(fen);
+        if (!board) {
+            return {
+                ok: false,
+                error: 'FEN_PARSE_ERROR',
+                details: 'Failed to parse FEN string into board state'
             };
         }
         

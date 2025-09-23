@@ -89,7 +89,7 @@ function registerCoreTests(framework) {
             // Count users with this email before duplicate attempt
             const countBefore = await client.query('SELECT COUNT(*) as count FROM users WHERE email = $1', [email]);
             
-            // Attempt to create duplicate user - this should fail
+            // Attempt to create duplicate user  this should fail!
             let constraintViolated = false;
             let errorType = '';
             

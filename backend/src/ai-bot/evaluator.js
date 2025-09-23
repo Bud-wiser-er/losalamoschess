@@ -73,7 +73,7 @@ class Evaluator {
     }
 
     getPieceValue(piece, rank, file) {
-        const baseValue = this.pieceValues[piece.type[0]];
+        const baseValue = this.pieceValues[piece.type.toLowerCase()];
         let positionalBonus = 0;
         
         // Add positional bonuses based on piece type
