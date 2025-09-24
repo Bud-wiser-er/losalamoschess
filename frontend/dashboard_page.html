@@ -106,6 +106,58 @@
     .logout-btn:hover {
       color: #c0392b;
     }
+
+
+    /* Notifications */
+    .notifications {
+      position: relative;
+      cursor: pointer;
+    }
+    .notifications i {
+      font-size: 20px;
+      color: #555;
+    }
+    .badge {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 50%;
+    }
+    .notif-dropdown {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 30px;
+      background: #fff;
+      border-radius: 10px;
+      width: 250px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 300;
+    }
+    .notif-dropdown h4 {
+      margin: 10px;
+      font-size: 14px;
+    }
+    .notif-dropdown ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .notif-dropdown li {
+      padding: 10px;
+      font-size: 13px;
+      border-bottom: 1px solid #eee;
+    }
+    .notif-dropdown li:last-child {
+      border-bottom: none;
+    }
+
       
 
     /* Weekly Event Bubble */
@@ -262,11 +314,122 @@
     color: #333;
     }
 
+    /* Difficulty modal */
+    .difficulty-options {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 15px;
+    }
+    .difficulty-options button {
+      background: #4b56d2;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .difficulty-options button:hover {
+      opacity: 0.9;
+    }
+
+
+
+    /* Modal Background */
+    .modal {
+      display: none; /* hidden by default */
+      position: fixed;
+      z-index: 200;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+    }
+
+    /* Modal Content Box */
+    .modal-content {
+      background: #fff;
+      margin: 10% auto;
+      padding: 20px;
+      border-radius: 15px;
+      width: 400px;
+      max-width: 90%;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+      animation: fadeIn 0.3s ease;
+    }
+
+    /* Close button */
+    .close {
+      float: right;
+      font-size: 20px;
+      font-weight: bold;
+      cursor: pointer;
+      color: #666;
+    }
+    .close:hover {
+      color: #000;
+    }
+
+    /* Friends list */
+    .friends-list {
+      list-style: none;
+      padding: 0;
+      margin: 15px 0 0;
+    }
+    .friends-list li {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .friends-list button {
+      background: #4b56d2;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    .friends-list button:hover {
+      opacity: 0.9;
+    }
+
+    /* Simple fade in animation */
+    @keyframes fadeIn {
+      from {opacity: 0; transform: translateY(-10px);}
+      to {opacity: 1; transform: translateY(0);}
+    }
+
+    /* Add Friend Section */
+    .add-friend {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .add-friend input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .add-friend button {
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .add-friend button:hover {
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body>
 
-   <!-- Header -->
+<!-- Header -->
 <header class="header">
   <div class="header-content">
     <!-- Logo -->
@@ -299,12 +462,24 @@
     <!-- Profile / Logout -->
     <div class="profile-section">
       <span class="username">John Doe</span>
+
+      <!-- Notifications -->
+      <div class="notifications" id="notifications">
+        <i class="fas fa-bell"></i>
+        <span class="badge" id="notifCount">0</span>
+        <div class="notif-dropdown" id="notifDropdown">
+          <h4>Notifications</h4>
+          <ul id="notifList"></ul>
+        </div>
+      </div>
+
       <a href="login_page.html" class="logout-btn">Logout</a>
     </div>
+
   </div>
+
+
 </header>
-
-
   <!-- Weekly Event -->
   <div class="event-bubble">
     <h3>🏆 Weekly Blitz Tournament</h3>
@@ -312,16 +487,16 @@
     <button>Join Tournament</button>
   </div>
 
+
   <!-- Quick Play -->
   <div class="quick-play">
     <div class="quick-card">
       <i class="fas fa-robot"></i>
       <h4>Play vs Computer</h4>
       <p>Challenge our AI from beginner to advanced levels</p>
-      <a href="game_view.html">
-        <button>Play Now</button>
-      </a>
+      <button id="playVsComputerBtn">Play Now</button>
     </div>
+
     <div class="quick-card">
       <i class="fas fa-globe"></i>
       <h4>Play Online</h4>
@@ -348,6 +523,7 @@
     </div>
   </div>
 
+
   <!-- Statistics -->
   <div class="stats">
     <div class="stat-card">
@@ -371,6 +547,7 @@
       <div class="sub">Tournament Rank (Top 5%)</div>
     </div>
   </div>
+
 
   <!-- Recent Games -->
   <div class="recent">
@@ -406,6 +583,220 @@
       </div>
     </div>
   </div>
+
+
+  <!-- Difficulty Modal -->
+  <div id="difficultyModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h3>Select Difficulty</h3>
+      <div class="difficulty-options">
+        <button data-level="Easy">Easy</button>
+        <button data-level="Medium">Medium</button>
+        <button data-level="Hard">Hard</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Friends Modal -->
+  <div id="friendsModal" class="modal">
+    <div class="modal-content">
+      <span class="close">&times;</span>
+      <h2>Your Friends</h2>
+
+      <!-- Add Friend Form -->
+      <div class="add-friend">
+        <input type="email" id="friendEmail" placeholder="Enter friend's email">
+        <button id="addFriendBtn">Add</button>
+      </div>
+
+      <!-- Friends List -->
+      <ul class="friends-list" id="friendsList">
+        <li>♟️ ChessMaster99 <button>Challenge</button></li>
+        <li>♟️ KnightRider <button>Challenge</button></li>
+        <li>♟️ AI Level 3 <button>Challenge</button></li>
+      </ul>
+    </div>
+  </div>
+
+
+
+  <!-- Friend pop-up (javascript) -->
+  <script>
+    // Elements
+    const modal = document.getElementById("friendsModal");
+    const friendsLink = document.querySelector('.nav-menu a[href="#social"]');
+    const closeBtn = document.querySelector(".modal .close");
+    const addFriendBtn = document.getElementById("addFriendBtn");
+    const friendEmailInput = document.getElementById("friendEmail");
+    const friendsList = document.getElementById("friendsList");
+
+    const notifications = document.getElementById("notifications");
+    const notifDropdown = document.getElementById("notifDropdown");
+    const notifCount = document.getElementById("notifCount");
+    const notifList = document.getElementById("notifList");
+
+    let notifCounter = 0;
+
+    // === Modal Controls ===
+    friendsLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      modal.style.display = "block";
+      friendsLink.classList.add("active");
+    });
+
+    function closeModal(targetModal) {
+      targetModal.style.display = "none";
+      friendsLink.classList.remove("active");
+    }
+
+    // Close buttons (all modals)
+    document.querySelectorAll(".modal .close").forEach(btn => {
+      btn.addEventListener("click", () => {
+        btn.closest(".modal").style.display = "none";
+        friendsLink.classList.remove("active");
+      });
+    });
+
+    // Click outside modal to close
+    window.addEventListener("click", (e) => {
+      if (e.target.classList.contains("modal")) {
+        e.target.style.display = "none";
+        friendsLink.classList.remove("active");
+      }
+    });
+
+
+    // === Add Friend Request ===
+    addFriendBtn.addEventListener("click", () => {
+      const email = friendEmailInput.value.trim();
+      if (email) {
+        // Create a friend request notification instead of adding directly
+        addNotification(`Friend request sent to ${email}`);
+        friendEmailInput.value = "";
+      } else {
+        alert("Please enter a valid email.");
+      }
+    });
+
+
+    // === Notifications ===
+    // === Notifications ===
+    function addNotification(message, type="info", data=null) {
+      notifCounter++;
+      notifCount.textContent = notifCounter;
+
+      const li = document.createElement("li");
+      li.innerHTML = `<span>${message}</span>`;
+
+      if (type === "request") {
+        // Only incoming requests should have accept/decline
+        const actions = document.createElement("div");
+        actions.style.marginTop = "5px";
+
+        const acceptBtn = document.createElement("button");
+        acceptBtn.textContent = "Accept";
+        acceptBtn.style.background = "#27ae60";
+        acceptBtn.style.color = "#fff";
+        acceptBtn.style.marginRight = "5px";
+        acceptBtn.style.border = "none";
+        acceptBtn.style.borderRadius = "5px";
+        acceptBtn.style.padding = "3px 8px";
+        acceptBtn.style.cursor = "pointer";
+
+        const declineBtn = document.createElement("button");
+        declineBtn.textContent = "Decline";
+        declineBtn.style.background = "#c0392b";
+        declineBtn.style.color = "#fff";
+        declineBtn.style.border = "none";
+        declineBtn.style.borderRadius = "5px";
+        declineBtn.style.padding = "3px 8px";
+        declineBtn.style.cursor = "pointer";
+
+        acceptBtn.addEventListener("click", () => {
+          li.innerHTML = `<span>✅ You accepted: ${message}</span>`;
+          notifCounter--;
+          notifCount.textContent = notifCounter;
+        });
+        declineBtn.addEventListener("click", () => {
+          li.innerHTML = `<span>❌ You declined: ${message}</span>`;
+          notifCounter--;
+          notifCount.textContent = notifCounter;
+        });
+
+        actions.appendChild(acceptBtn);
+        actions.appendChild(declineBtn);
+        li.appendChild(actions);
+      } else {
+        // Outgoing info → style it differently
+        li.style.fontStyle = "italic";
+      }
+
+      notifList.appendChild(li);
+    }
+
+
+    // Toggle notifications dropdown
+    notifications.addEventListener("click", () => {
+      notifDropdown.style.display =
+        notifDropdown.style.display === "block" ? "none" : "block";
+    });
+
+    // === Handle Challenge Button Click ===
+    friendsList.addEventListener("click", (e) => {
+      if (e.target.tagName === "BUTTON") {
+        const btn = e.target;
+        if (!btn.classList.contains("disabled")) {
+          addNotification(`Challenge sent to ${btn.parentElement.textContent.replace("Challenge","").trim()}`);
+          btn.classList.add("disabled");
+          btn.style.background = "#ccc";
+          btn.style.cursor = "not-allowed";
+          btn.textContent = "Challenged";
+        }
+      }
+    });
+
+
+    // === Handle Rematch Buttons ===
+    document.querySelectorAll(".game .buttons button").forEach(btn => {
+      if (btn.textContent.includes("Rematch")) {
+        btn.addEventListener("click", () => {
+          const opponent = btn.closest(".game").querySelector(".opponent").textContent.replace(/Win|Loss|Draw/, "").trim();
+          addNotification(`Rematch request sent to ${opponent}`, "info");
+
+          // Grey out the button so it can’t be clicked again
+          btn.disabled = true;
+          btn.style.background = "#ccc";
+          btn.style.cursor = "not-allowed";
+        });
+      }
+    });
+
+    // === Difficulty Modal ===
+    const difficultyModal = document.getElementById("difficultyModal");
+    const playVsComputerBtn = document.getElementById("playVsComputerBtn");
+    const difficultyClose = difficultyModal.querySelector(".close");
+
+    playVsComputerBtn.addEventListener("click", () => {
+      difficultyModal.style.display = "block";
+    });
+
+    difficultyClose.addEventListener("click", () => {
+      difficultyModal.style.display = "none";
+    });
+
+    difficultyModal.querySelectorAll(".difficulty-options button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const level = btn.dataset.level;
+        addNotification(`Game vs Computer (${level}) started`);
+        // Pass difficulty via query param
+        window.location.href = `game_view.html?difficulty=${level}`;
+      });
+    });
+
+
+  </script>
 
 </body>
 </html>
