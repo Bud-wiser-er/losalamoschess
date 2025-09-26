@@ -1,0 +1,255 @@
+@startuml Byron_Sequence_Diagrams
+
+' ============================================
+' PLAYER MOVE VALIDATION SEQUENCE
+' ============================================
+
+@startuml Player_Move_Validation
+title Player Move Validation Flow
+
+actor User as U
+participant "Frontend\n(Natasha)" as FE
+participant "WebSocket\n(Ethan)" as WS
+participant "RulesEngine\n(Byron)" as RE
+participant "Database\n(Arno)" as DB
+
+U -> FE : Click piece & destination
+activate FE
+FE -> FE : Construct UCI move\n(e.g., "e2e4")
+FE -> WS : {type: "MoveIntent",\n move: "e2e4",\n gameId: "123"}
+activate WS
+
+WS -> DB : Fetch current game state
+activate DB
+DB --> WS : {fen, version, players}
+deactivate DB
+
+WS -> RE : validateMove(fen, "e2e4")
+activate RE
+RE -> RE : Parse FEN
+RE -> RE : Validate UCI format
+RE -> RE : Check piece ownership
+RE -> RE : Validate move legality
+RE -> RE : Check if king in check
+RE --> WS : {valid: true,\n flags: {check: false}}
+deactivate RE
+
+alt Move is valid
+    WS -> RE : applyMove(fen, "e2e4")
+    activate RE
+    RE -> RE : Apply move to board
+    RE -> RE : Generate new FEN
+    RE -> RE : Check game status
+    RE --> WS : {fen: "new-position",\n san: "e4",\n flags: {}}
+    deactivate RE
+    
+    WS -> DB : Save move\n{gameId, move, fen, version+1}
+    activate DB
+    DB --> WS : Success
+    deactivate DB
+    
+    WS -> FE : Broadcast\n{type: "Snapshot",\n fen, san, flags}
+    FE -> U : Update board display
+else Move is invalid
+    WS -> FE : {type: "Error",\n error: "ILLEGAL_MOVE"}
+    FE -> U : Show error message
+end
+
+deactivate WS
+deactivate FE
+
+@enduml
+
+' ============================================
+' AI BOT MOVE GENERATION SEQUENCE
+' ============================================
+
+@startuml AI_Bot_Move_Generation
+title AI Bot Move Generation Flow
+
+participant "WebSocket\n(Ethan)" as WS
+participant "AIBot\n(Byron)" as AI
+participant "Strategy\n(L0/L1/L2/L3)" as ST
+participant "RulesEngine\n(Byron)" as RE
+participant "Evaluator\n(Byron)" as EV
+
+WS -> AI : generateMove(\n  {fen, level: "L2",\n   msCap: 1000})
+activate AI
+
+AI -> AI : Select strategy\nbased on level
+AI -> ST : findBestMove(fen, msCap)
+activate ST
+
+alt Level L0 (Random)
+    ST -> RE : getLegalMoves(fen)
+    activate RE
+    RE --> ST : [legal moves]
+    deactivate RE
+    ST -> ST : Pick random move
+    
+else Level L1 (Greedy)
+    ST -> RE : getLegalMoves(fen)
+    activate RE
+    RE --> ST : [legal moves]
+    deactivate RE
+    
+    loop For each move
+        ST -> EV : evaluatePosition(newFen)
+        activate EV
+        EV --> ST : score
+        deactivate EV
+    end
+    ST -> ST : Select best capture
+    
+else Level L2/L3 (Minimax)
+    ST -> RE : getLegalMoves(fen)
+    activate RE
+    RE --> ST : [legal moves]
+    deactivate RE
+    
+    ST -> ST : Start minimax search
+    loop Minimax recursion (depth 2-3)
+        ST -> RE : getLegalMoves(position)
+        activate RE
+        RE --> ST : [moves]
+        deactivate RE
+        
+        ST -> EV : evaluatePosition(position)
+        activate EV
+        EV --> ST : score
+        deactivate EV
+        
+        ST -> ST : Alpha-beta pruning
+        
+        alt Time limit reached
+            ST -> ST : Return best move so far
+        end
+    end
+end
+
+ST --> AI : {move: "e7e5",\n eval: 0.3}
+deactivate ST
+
+AI -> RE : validateMove(fen, "e7e5")
+activate RE
+RE --> AI : {valid: true}
+deactivate RE
+
+AI --> WS : {ok: true,\n move: "e7e5",\n eval: 0.3,\n time: 850}
+deactivate AI
+
+WS -> WS : Apply move\n(same as player flow)
+
+@enduml
+
+' ============================================
+' MODULE INITIALIZATION SEQUENCE
+' ============================================
+
+@startuml Module_Initialization
+title Byron Module Initialization
+
+participant "Server\nStartup" as SRV
+participant "RulesEngine" as RE
+participant "AIBot" as AI
+participant "Strategy\nClasses" as ST
+
+SRV -> RE : new RulesEngine()
+activate RE
+RE -> RE : Initialize\nPieceMovement
+RE -> RE : Initialize\nBoardValidator
+RE -> RE : Initialize\nGameStateChecker
+RE -> RE : Load Constants
+RE --> SRV : engine instance
+deactivate RE
+
+SRV -> AI : new AIBot()
+activate AI
+AI -> AI : Create strategy map
+AI -> ST : Initialize L0\n(RandomStrategy)
+activate ST
+ST --> AI : strategy instance
+deactivate ST
+
+AI -> ST : Initialize L1\n(GreedyStrategy)
+activate ST
+ST --> AI : strategy instance
+deactivate ST
+
+AI -> ST : Initialize L2\n(MinimaxStrategy)
+activate ST
+ST --> AI : strategy instance
+deactivate ST
+
+AI -> ST : Initialize L3\n(EnhancedStrategy)
+activate ST
+ST --> AI : strategy instance
+deactivate ST
+
+AI --> SRV : aiBot instance
+deactivate AI
+
+note right of SRV
+  Both RulesEngine and AIBot
+  are now ready for use by
+  the WebSocket layer
+end note
+
+@enduml
+
+' ============================================
+' ERROR HANDLING SEQUENCE
+' ============================================
+
+@startuml Error_Handling
+title Byron Error Handling Flow
+
+participant "WebSocket" as WS
+participant "RulesEngine" as RE
+participant "AIBot" as AI
+
+== Invalid Move Validation ==
+WS -> RE : validateMove(fen, "invalid")
+activate RE
+RE -> RE : Parse UCI
+RE --> WS : {valid: false,\n error: "INVALID_UCI"}
+deactivate RE
+
+== Invalid FEN ==
+WS -> RE : validateMove("invalid-fen", "e2e4")
+activate RE
+RE -> RE : Parse FEN
+RE --> WS : {valid: false,\n error: "INVALID_FEN"}
+deactivate RE
+
+== Illegal Move (Variant Rules) ==
+WS -> RE : validateMove(fen, "e1g1")
+activate RE
+RE -> RE : Check castling
+RE --> WS : {valid: false,\n error: "NO_CASTLING"}
+deactivate RE
+
+== AI Bot Invalid Level ==
+WS -> AI : generateMove(\n  {fen, level: "L99"})
+activate AI
+AI -> AI : Validate level
+AI --> WS : {ok: false,\n error: "INVALID_LEVEL"}
+deactivate AI
+
+== AI Bot Timeout ==
+WS -> AI : generateMove(\n  {fen, level: "L3",\n   msCap: 100})
+activate AI
+AI -> AI : Start search
+AI -> AI : Time limit reached
+AI --> WS : {ok: true,\n move: "best-so-far",\n time: 100}
+deactivate AI\
+
+note right of WS
+  All errors follow consistent
+  format with descriptive
+  error codes
+end note
+
+@enduml
+
+@enduml

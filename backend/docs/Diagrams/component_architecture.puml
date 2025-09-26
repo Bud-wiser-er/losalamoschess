@@ -1,0 +1,216 @@
+@startuml Byron_Component_Architecture
+
+skinparam component {
+    BackgroundColor #E1F5FE
+    BorderColor #01579B
+    ArrowColor #01579B
+}
+
+skinparam interface {
+    BackgroundColor #FFF9C4
+    BorderColor #F57F17
+}
+
+' ============================================
+' EXTERNAL COMPONENTS (Other Team Members)
+' ============================================
+
+package "Frontend (Natasha)" {
+    component "React UI" as UI
+    interface "WebSocket Client" as WSClient
+}
+
+package "WebSocket Server (Ethan)" {
+    component "WebSocket Handler" as WSHandler
+    component "Game Orchestrator" as Orchestrator
+    interface "Move API" as MoveAPI
+    interface "Bot API" as BotAPI
+}
+
+package "Database (Arno)" {
+    component "PostgreSQL" as DB
+    interface "Persistence API" as PersistAPI
+}
+
+' ============================================
+' BYRON'S COMPONENTS
+' ============================================
+
+package "Byron - Rules Engine & AI" {
+    
+    ' Rules Engine Components
+    package "Rules Engine Module" {
+        component "RulesEngine" as RulesEngine
+        component "PieceMovement" as PieceMove
+        component "BoardValidator" as BoardVal
+        component "GameStateChecker" as GameState
+        component "Constants" as Constants
+        
+        interface "Rules API" as RulesAPI
+        
+        RulesEngine --> RulesAPI
+        RulesEngine ..> PieceMove
+        RulesEngine ..> BoardVal
+        RulesEngine ..> GameState
+        RulesEngine ..> Constants
+    }
+    
+    ' AI Bot Components
+    package "AI Bot Module" {
+        component "AIBot" as AIBot
+        component "Strategy Manager" as StratManager
+        component "Evaluator" as Evaluator
+        
+        interface "Bot API Internal" as InternalBotAPI
+        
+        package "Strategies" {
+            component "L0: Random" as L0
+            component "L1: Greedy" as L1
+            component "L2: Minimax" as L2
+            component "L3: Enhanced" as L3
+        }
+        
+        AIBot --> InternalBotAPI
+        AIBot ..> StratManager
+        StratManager ..> L0
+        StratManager ..> L1
+        StratManager ..> L2
+        StratManager ..> L3
+        
+        L0 ..> RulesEngine
+        L1 ..> RulesEngine
+        L1 ..> Evaluator
+        L2 ..> RulesEngine
+        L2 ..> Evaluator
+        L3 ..> RulesEngine
+        L3 ..> Evaluator
+    }
+    
+    ' Main Entry Point
+    component "Main Entry CLI" as MainEntry
+    MainEntry ..> RulesEngine
+    MainEntry ..> AIBot
+    
+    ' Unit Tests
+    package "Testing" {
+        component "Unit Tests" as UnitTests
+        component "Stress Tests" as StressTests
+    }
+    
+    UnitTests ..> RulesEngine
+    UnitTests ..> AIBot
+    StressTests ..> AIBot
+}
+
+' ============================================
+' DATA FLOW CONNECTIONS
+' ============================================
+
+' Frontend to WebSocket
+UI --> WSClient
+WSClient --> WSHandler
+
+' WebSocket to Byron
+Orchestrator --> MoveAPI
+MoveAPI --> RulesAPI
+
+Orchestrator --> BotAPI
+BotAPI --> InternalBotAPI
+
+' WebSocket to Database
+Orchestrator --> PersistAPI
+
+' ============================================
+' NOTES
+' ============================================
+
+note right of RulesAPI
+Rules Engine Interface
+• validateMove(fen, uci, options)
+• applyMove(fen, uci, options)
+• getLegalMoves(fen)
+• parseFEN(fen)
+• generateFEN(board)
+
+Returns: {valid, error, flags}
+end note
+
+note right of InternalBotAPI
+AI Bot Interface
+• generateMove(request)
+• cancelPendingRequest(gameId)
+
+Request: {fen, level, msCap, seed}
+Response: {ok, move, eval, time, error}
+end note
+
+note right of MoveAPI
+Move Validation API
+Used by WebSocket to validate
+player moves before persistence
+end note
+
+note right of BotAPI
+Bot Generation API
+Used by WebSocket to request
+AI moves for bot opponents
+end note
+
+note bottom of RulesEngine
+Byron's Deliverables
+
+File Structure:
+backend/src/
+├── engine/
+│   ├── index.js (RulesEngine)
+│   ├── piece-movement.js
+│   ├── board-validator.js
+│   ├── game-state-checker.js
+│   └── constants.js
+├── ai-bot/
+│   ├── index.js (AIBot)
+│   ├── evaluator.js
+│   └── strategies/
+│       ├── random.js (L0)
+│       ├── greedy.js (L1)
+│       ├── minimax.js (L2)
+│       └── enhanced.js (L3)
+└── cli/
+    └── main_entry_index.js
+
+Test Coverage: 97.4%
+Performance: <5ms per move validation
+end note
+
+note bottom of Orchestrator
+Integration Flow
+
+1. Player Move:
+   Frontend → WebSocket → Byron (validate)
+   → Database (persist) → Broadcast
+
+2. AI Move:
+   WebSocket → Byron AI (generate)
+   → Byron Rules (validate)
+   → Database (persist) → Broadcast
+
+3. Game State:
+   Always authoritative from Database
+   Validated by Byron Rules Engine
+end note
+
+note top of Constants
+Los Alamos Variant Rules
+• 6×6 board (no bishops)
+• No castling
+• No en passant
+• Single pawn moves only
+• Promotion to Q/R/N only
+• Files: a-f, Ranks: 1-6
+
+Initial FEN:
+rnqknr/pppppp/6/6/PPPPPP/RNQKNR
+w - - 0 1
+end note
+
+@enduml
