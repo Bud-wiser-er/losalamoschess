@@ -4,6 +4,10 @@
  */
 
 class Evaluator {
+    /**
+     * Initialise material values and simple piece–square/centre-control tables.
+     * Values are scaled (e.g., pawn=100) so small positional terms are meaningful.
+     **/
     constructor() {
         this.pieceValues = {
             'p': 100,
@@ -42,6 +46,13 @@ class Evaluator {
         ];
     }
 
+    /**
+     * Evaluate a position given in Los Alamos FEN.
+     * Score is from the side-to-move’s perspective (positive = good for side to move).
+     *
+     * @param {string} fen
+     * @returns {number}
+     **/
     evaluatePosition(fen) {
         // Parse FEN to get board
         const board = this.parseFEN(fen);
@@ -72,6 +83,13 @@ class Evaluator {
         return board.turn === 'white' ? evaluation : -evaluation;
     }
 
+     /**
+     * Base material value + piece–square positional bonus.
+     * @param {{type:string,color:'white'|'black'}} piece
+     * @param {number} rank - 0 (top) … 5 (bottom)
+     * @param {number} file - 0 … 5
+     * @returns {number}
+     **/
     getPieceValue(piece, rank, file) {
         const baseValue = this.pieceValues[piece.type.toLowerCase()];
         let positionalBonus = 0;
@@ -102,8 +120,16 @@ class Evaluator {
         return baseValue + positionalBonus;
     }
 
+    /**
+     * Very rough mobility proxy: counts potential activity by piece type for side to move.
+     * (In a full engine, you’d call the rules engine to enumerate legal moves.)
+     *
+     * @param {string} fen - Unused here; kept for parity with richer evaluators.
+     * @param {{squares:any[][],turn:'white'|'black'}} board
+     * @returns {number}
+     **/
     evaluateMobility(fen, board) {
-        // Simple mobility: count available moves
+        // Simpler mobilitw here we jsut count available moves
         // In a real implementation, this would use the rules engine
         let mobility = 0;
         
@@ -126,7 +152,13 @@ class Evaluator {
         
         return mobility * 5; // Scale the mobility bonus
     }
-
+    /**
+     * Penalise kings that are too central (files 2–3) on a 6×6 board.
+     * Positive return favours White; negative favours Black.
+     *
+     * @param {{squares:any[][]}} board
+     * @returns {number}
+     **/
     evaluateKingSafety(board) {
         let safety = 0;
         
@@ -163,6 +195,13 @@ class Evaluator {
         return safety;
     }
 
+    /**
+     * Minimal Los Alamos FEN parser sufficient for evaluation.
+     * Expects 6 fields and 6 ranks; ignores castling/en passant/halfmove/fullmove semantics.
+     *
+     * @param {string} fen
+     * @returns {{squares:(Array<(null|{type:string,color:string,notation:string})[]>),turn:'white'|'black'}|null}
+     **/
     parseFEN(fen) {
         // Simplified FEN parser for evaluation
         if (!fen || typeof fen !== 'string') return null;
@@ -209,6 +248,11 @@ class Evaluator {
         return board;
     }
 
+     /**
+     * Map FEN piece letters to internal type strings.
+     * @param {string} notation - Single letter, case-insensitive.
+     * @returns {'king'|'queen'|'rook'|'knight'|'pawn'|undefined}
+     **/
     getPieceType(notation) {
         const types = {
             'k': 'king',
