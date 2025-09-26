@@ -1,16 +1,29 @@
+/*
+ * Author: Byron Norval
+ * Student Number: 21444758
+ * Last Modified: 26/09/2025
+ * File: main_entry_index.js
+ * 
+ * Description: 
+ * Main entry point and demonstration for Byron's game logic components.
+ * Includes Rules Engine and AI Bot with all difficulty levels (L0-L3).
+ * DO NOT USE THIS FOR INTERGRATION PEOPLE
+ * DO NOT DO NOT DO NOT
+ * 
+ * Part of: EPE 321 Group Project - Los Alamos Chess Platform
+ */
+
 const RulesEngine = require('../src/engine/index');
-// AI Bot will be implemented later
-// const AIBot = require('./ai-bot');
+const AIBot = require('../src/ai-bot/index');
 
 /**
  * Main entry point for game logic components
- * This file demonstrates how to use the Rules Engine
- * AI Bot will be added in a future iteration
- */
+ * Demonstrates how to use the Rules Engine and AI Bot
+ **/
 
 // Initialize components
 const rulesEngine = new RulesEngine();
-// const aiBot = new AIBot(); // To be implemented
+const aiBot = new AIBot();
 
 // Example usage
 async function demonstrateGameLogic() {
@@ -72,35 +85,74 @@ async function demonstrateGameLogic() {
         console.log('After promotion:', promoted.fen);
     }
     
-    // AI Bot demonstration (placeholder for future implementation)
-    console.log('\n6. AI Bot (To be implemented):');
-    console.log('AI bot with levels L0-L3 will be added in next iteration');
+    // AI Bot demonstration
+    console.log('\n6. AI Bot Testing:');
+    console.log('Testing all difficulty levels...\n');
     
-    /* Future AI implementation:
-    const botRequest = {
-        fen: initialFEN,
-        level: 'L1',
-        msCap: 1000
-    };
+    const levels = ['L0', 'L1', 'L2', 'L3'];
+    for (const level of levels) {
+        console.log(`Testing ${level}:`);
+        const botResponse = await aiBot.generateMove({
+            fen: initialFEN,
+            level: level,
+            msCap: 1000
+        });
+        
+        if (botResponse.ok) {
+            console.log(`  Move: ${botResponse.move}`);
+            console.log(`  Evaluation: ${botResponse.evaluation}`);
+            console.log(`  Depth: ${botResponse.depth}`);
+            console.log(`  Nodes: ${botResponse.nodes}`);
+            console.log(`  Time: ${botResponse.timeMs}ms\n`);
+        } else {
+            console.log(`  Error: ${botResponse.error}`);
+        }
+    }
     
-    const botMove = await aiBot.generateMove(botRequest);
-    console.log('AI L1 move:', botMove);
-    */
+    // Demonstrate bot game
+    console.log('\n7. Bot vs Bot Game (L1 vs L2):');
+    currentFEN = initialFEN;
+    let moveCount = 0;
+    const maxMoves = 10;
+    
+    while (moveCount < maxMoves) {
+        const botLevel = moveCount % 2 === 0 ? 'L1' : 'L2';
+        const botMove = await aiBot.generateMove({
+            fen: currentFEN,
+            level: botLevel,
+            msCap: 500
+        });
+        
+        if (!botMove.ok) {
+            console.log(`Game ended: ${botMove.error}`);
+            break;
+        }
+        
+        const result = rulesEngine.applyMove(currentFEN, botMove.move);
+        console.log(`Move ${moveCount + 1} (${botLevel}): ${botMove.move} - ${result.status}`);
+        
+        if (result.status !== 'ONGOING') {
+            console.log(`Game Over: ${result.status}`);
+            break;
+        }
+        
+        currentFEN = result.fen;
+        moveCount++;
+    }
 }
 
 // Export for use by other modules
 module.exports = {
     RulesEngine,
-    // AIBot will be exported when implemented
+    AIBot,
     
     // Convenience functions for integration
     validateMove: (fen, uci) => rulesEngine.validateMove(fen, uci),
     applyMove: (fen, uci) => rulesEngine.applyMove(fen, uci),
     getLegalMoves: (fen) => rulesEngine.getLegalMoves(fen),
-    // generateBotMove will be added when AI is implemented
+    generateBotMove: (request) => aiBot.generateMove(request)
 };
 
-// Run demo if this file is executed directly
 if (require.main === module) {
     demonstrateGameLogic().catch(console.error);
 }
