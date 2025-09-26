@@ -22,6 +22,7 @@
     "test:server":"node security_server_tester.js",
     "test:byron:board-validator": "node backend/unit-tests/test-board-validator.js",
     "test:byron:piece-movement": "node backend/unit-tests/test-piece-movement.js",
+    "test:byron:debug_piece_movement": "node backend/unit-tests/test-even-more-piece-movement.js",
     "test:byron:rules-engine": "node backend/unit-tests/test-rules-engine.js",
     "test:byron:ai-bot": "node backend/unit-tests/test-ai-bot.js",
     "test:byron:stress": "node backend/unit-tests/stress-test.js",

@@ -92,7 +92,7 @@ node backend/unit-tests/stress-test.js
 Usage Examples
 
 Rules Engine Usage
-const RulesEngine = require('./src/engine/index.js');
+const RulesEngine = require('../src/engine/index.js');
 
 const engine = new RulesEngine();
 
