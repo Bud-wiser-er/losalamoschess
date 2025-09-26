@@ -98,6 +98,184 @@ class AuthenticationService {
         throw error;
     }
 }
+// Generate a simple 6-digit reset code
+    generateResetCode() {
+        return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    // Store for in-memory demo (use database in production)
+    resetCodes = new Map(); // email -> { code, token, expiry }
+
+    // Verify reset code and return validated token
+    async verifyResetCode(email, code, token) {
+        try {
+            // Check if code exists and matches
+            const storedData = this.resetCodes.get(email);
+            if (!storedData) {
+                return {
+                    success: false,
+                    message: 'No reset code found for this email'
+                };
+            }
+
+            // Check if code matches
+            if (storedData.code !== code) {
+                return {
+                    success: false,
+                    message: 'Invalid verification code'
+                };
+            }
+
+            // Check if code expired (10 minutes)
+            if (Date.now() > storedData.expiry) {
+                this.resetCodes.delete(email);
+                return {
+                    success: false,
+                    message: 'Verification code has expired'
+                };
+            }
+
+            // Check if token matches
+            if (storedData.token !== token) {
+                return {
+                    success: false,
+                    message: 'Invalid reset token'
+                };
+            }
+
+            return {
+                success: true,
+                message: 'Code verified successfully',
+                resetToken: token
+            };
+
+        } catch (error) {
+            console.error('Reset code verification error:', error);
+            throw error;
+        }
+    }
+
+    // Complete password reset
+    async resetPassword(email, newPassword, resetToken) {
+        try {
+            // Validate new password
+            if (!this._validatePassword(newPassword)) {
+                return {
+                    success: false,
+                    message: 'Password must be at least 8 characters with uppercase, lowercase, and number'
+                };
+            }
+
+            // Find user
+            const user = await this.db.findUserByEmail(email);
+            if (!user) {
+                return {
+                    success: false,
+                    message: 'User not found'
+                };
+            }
+
+            // Verify reset token is still valid in database
+            if (user.resetToken !== resetToken) {
+                return {
+                    success: false,
+                    message: 'Invalid or expired reset token'
+                };
+            }
+
+            // Check token expiry
+            if (!user.resetExpiry || Date.now() > user.resetExpiry.getTime()) {
+                return {
+                    success: false,
+                    message: 'Reset token has expired'
+                };
+            }
+
+            // Hash new password
+            const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+            // Update user password and clear reset token
+            await this.db.updateUser(user.id, {
+                passwordHash: hashedPassword,
+                resetToken: null,
+                resetExpiry: null
+            });
+
+            // Clear stored reset code
+            this.resetCodes.delete(email);
+
+            // Log successful password reset
+            await this.db.createAuditLog({
+                action: 'PASSWORD_RESET_COMPLETED',
+                userId: user.id,
+                metadata: { email },
+                timestamp: new Date()
+            });
+
+            return {
+                success: true,
+                message: 'Password reset successfully'
+            };
+
+        } catch (error) {
+            console.error('Password reset error:', error);
+            throw error;
+        }
+    }
+
+    // Updated sendPasswordReset method to include code generation
+    async sendPasswordReset(email) {
+        try {
+            const user = await this.db.findUserByEmail(email);
+            if (!user) {
+                // Don't reveal if email exists for security
+                return { 
+                    success: true, 
+                    message: 'If email exists, reset code sent'
+                };
+            }
+
+            // Generate reset token and code
+            const resetToken = crypto.randomBytes(32).toString('hex');
+            const resetCode = this.generateResetCode();
+            const resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+            // Store in database
+            await this.db.updateUser(user.id, {
+                resetToken: resetToken,
+                resetExpiry: resetExpiry
+            });
+
+            // Store code temporarily (for demo - use email service in production)
+            this.resetCodes.set(email, {
+                code: resetCode,
+                token: resetToken,
+                expiry: Date.now() + 10 * 60 * 1000 // 10 minutes for code
+            });
+
+            await this.db.createAuditLog({
+                action: 'PASSWORD_RESET_REQUESTED',
+                userId: user.id,
+                metadata: { email },
+                timestamp: new Date()
+            });
+
+            // TODO: Send email with resetCode in production
+            // emailService.sendPasswordResetCode(email, resetCode);
+
+            console.log(`🔑 Demo: Reset code for ${email}: ${resetCode}`);
+
+            return { 
+                success: true, 
+                message: 'Reset code sent to your email',
+                resetToken // Remove in production - only for demo
+            };
+
+        } catch (error) {
+            console.error('Send password reset error:', error);
+            throw error;
+        }
+    }
 _validateUsername(username) {
         // Username rules: 3-20 chars, alphanumeric + underscore, no spaces
         const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
