@@ -10,8 +10,10 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
     }
 
     .card {
@@ -49,6 +51,18 @@
       border-radius: 8px;
       font-size: 1rem;
       box-sizing: border-box;
+      transition: border-color 0.3s ease;
+    }
+
+    .input-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .input-group input.error {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
     }
 
     .char-counter {
@@ -84,30 +98,43 @@
       font-size: 1.1rem;
       font-weight: bold;
       cursor: pointer;
-      transition: opacity 0.2s ease-in-out;
+      transition: all 0.3s ease;
     }
 
-    .btn:hover {
+    .btn:hover:not(:disabled) {
       opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
     }
 
     .error {
-      color: red;
+      color: #ef4444;
       font-size: 0.85rem;
-      margin-top: -0.5rem;
+      margin-top: 0.3rem;
       margin-bottom: 0.5rem;
       display: none;
+      text-align: left;
+    }
+
+    .error.show {
+      display: block;
     }
 
     .password-strength {
       font-size: 0.85rem;
       margin-top: 0.3rem;
       color: #444;
+      text-align: left;
     }
 
-    .weak { color: red; }
-    .medium { color: orange; }
-    .strong { color: green; }
+    .weak { color: #ef4444; }
+    .medium { color: #f59e0b; }
+    .strong { color: #10b981; }
 
     .checkbox-group {
       text-align: left;
@@ -180,6 +207,44 @@
       font-size: 1.2rem;
       color: #333;
     }
+
+    /* Notification Styles */
+    @keyframes slideInFromRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes slideOutToRight {
+      from {
+        transform: translateX(0);
+        opacity: 1;
+      }
+      to {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+    }
+
+    .temp-notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 15px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      z-index: 10000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      animation: slideInFromRight 0.3s ease-out;
+      max-width: 400px;
+      word-wrap: break-word;
+    }
   </style>
 </head>
 <body>
@@ -204,7 +269,7 @@
       <div class="input-group">
         <label for="password">Password</label>
         <input type="password" id="password" maxlength="30" required>
-        <span class="toggle-password" onclick="togglePassword('password', this)">-</span>
+        <span class="toggle-password" onclick="togglePassword('password', this)">👁</span>
         <div class="char-counter" id="passwordCounter">0 / 30</div>
         <div class="error" id="passwordError">Password is required.</div>
         <div class="password-strength" id="strengthText"></div>
@@ -213,7 +278,7 @@
       <div class="input-group">
         <label for="confirmPassword">Confirm Password</label>
         <input type="password" id="confirmPassword" maxlength="30" required>
-        <span class="toggle-password" onclick="togglePassword('confirmPassword', this)">-</span>
+        <span class="toggle-password" onclick="togglePassword('confirmPassword', this)">👁</span>
         <div class="char-counter" id="confirmCounter">0 / 30</div>
         <div class="error" id="confirmError">Passwords do not match.</div>
       </div>
@@ -226,7 +291,7 @@
         <div class="error" id="termsError">You must accept the terms to continue.</div>
       </div>
 
-      <button type="submit" class="btn">Register</button>
+      <button type="submit" class="btn" id="registerBtn">Register</button>
     </form>
 
     <div class="link">
@@ -255,10 +320,10 @@
   </div>
 
   <script>
-    const form = document.getElementById('registerForm');
-    const passwordInput = document.getElementById('password');
-    const strengthText = document.getElementById('strengthText');
-
+    // ========================================================================
+    // UI FUNCTIONALITY (Character counters, password toggle, modal)
+    // ========================================================================
+    
     // Character counters
     function setupCounter(id, counterId, max) {
       const input = document.getElementById(id);
@@ -272,38 +337,54 @@
         }
       });
     }
+    
     setupCounter("username", "usernameCounter", 20);
     setupCounter("email", "emailCounter", 50);
     setupCounter("password", "passwordCounter", 30);
     setupCounter("confirmPassword", "confirmCounter", 30);
 
-    // Toggle password visibility with dynamic eye
+    // Toggle password visibility
     function togglePassword(id, el) {
       const input = document.getElementById(id);
       if (input.type === "password") {
         input.type = "text";
-        el.textContent = "👁"; // open eye
+        el.textContent = "🙈"; // hidden eye
       } else {
         input.type = "password";
-        el.textContent = "-"; // closed eye
+        el.textContent = "👁"; // open eye
       }
     }
 
     // Password strength checker
+    const passwordInput = document.getElementById('password');
+    const strengthText = document.getElementById('strengthText');
+    
     passwordInput.addEventListener('input', () => {
       const val = passwordInput.value;
-      let strength = "Weak";
-      let cls = "weak";
+      let strength = "";
+      let cls = "";
 
-      if (val.length >= 8 && /[A-Z]/.test(val) && /\d/.test(val) && /[^A-Za-z0-9]/.test(val)) {
-        strength = "Strong";
-        cls = "strong";
-      } else if (val.length >= 6 && (/[A-Z]/.test(val) || /\d/.test(val))) {
-        strength = "Medium";
-        cls = "medium";
+      if (val.length === 0) {
+        strengthText.textContent = "";
+        strengthText.className = "password-strength";
+        return;
       }
 
-      strengthText.textContent = val ? `Strength: ${strength}` : "";
+      if (val.length >= 8 && /[A-Z]/.test(val) && /[a-z]/.test(val) && /\d/.test(val) && /[^A-Za-z0-9]/.test(val)) {
+        strength = "Very Strong";
+        cls = "strong";
+      } else if (val.length >= 8 && /[A-Z]/.test(val) && /[a-z]/.test(val) && /\d/.test(val)) {
+        strength = "Strong";
+        cls = "strong";
+      } else if (val.length >= 6 && ((/[A-Z]/.test(val) && /[a-z]/.test(val)) || (/[A-Za-z]/.test(val) && /\d/.test(val)))) {
+        strength = "Medium";
+        cls = "medium";
+      } else {
+        strength = "Weak";
+        cls = "weak";
+      }
+
+      strengthText.textContent = `Strength: ${strength}`;
       strengthText.className = `password-strength ${cls}`;
     });
 
@@ -312,7 +393,8 @@
     const termsModal = document.getElementById('termsModal');
     const closeModal = document.getElementById('closeModal');
 
-    termsLink.addEventListener('click', () => {
+    termsLink.addEventListener('click', (e) => {
+      e.preventDefault();
       termsModal.style.display = "flex";
     });
 
@@ -326,48 +408,222 @@
       }
     });
 
-    // Validate and mock submit
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      document.querySelectorAll('.error').forEach(el => el.style.display = 'none');
+    // ========================================================================
+    // BACKEND INTEGRATION AND FORM SUBMISSION
+    // ========================================================================
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.getElementById('registerForm');
+      const submitButton = document.getElementById('registerBtn');
+      
+      // SINGLE form submission handler with backend integration
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        console.log('🔄 Form submitted, starting validation...');
+        
+        // Clear previous errors
+        clearAllErrors();
 
-      const username = document.getElementById('username').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const password = passwordInput.value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
-      const terms = document.getElementById('terms').checked;
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const terms = document.getElementById('terms').checked;
 
-      let valid = true;
+        let valid = true;
 
-      if (!username) {
-        document.getElementById('usernameError').style.display = 'block';
-        valid = false;
+        // Client-side validation
+        if (!username) {
+          showFieldError('usernameError', 'Username is required.');
+          valid = false;
+        } else if (username.length < 3) {
+          showFieldError('usernameError', 'Username must be at least 3 characters.');
+          valid = false;
+        }
+
+        if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
+          showFieldError('emailError', 'Please enter a valid email address.');
+          valid = false;
+        }
+
+        if (!password) {
+          showFieldError('passwordError', 'Password is required.');
+          valid = false;
+        } else if (password.length < 8) {
+          showFieldError('passwordError', 'Password must be at least 8 characters long.');
+          valid = false;
+        } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
+          showFieldError('passwordError', 'Password must contain uppercase, lowercase, and a number.');
+          valid = false;
+        }
+
+        if (password !== confirmPassword) {
+          showFieldError('confirmError', 'Passwords do not match.');
+          valid = false;
+        }
+
+        if (!terms) {
+          showFieldError('termsError', 'You must accept the terms to continue.');
+          valid = false;
+        }
+
+        if (!valid) {
+          console.log('❌ Client-side validation failed');
+          return;
+        }
+
+        console.log('✅ Client-side validation passed');
+
+        // Show loading state
+        setButtonLoading(true);
+
+        try {
+          console.log('🔄 Sending registration request to /api/auth/register...');
+          
+          // Send registration request to backend
+          const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              username: username,
+              email: email,
+              password: password
+            })
+          });
+
+          const result = await response.json();
+          console.log('📨 Server response:', result);
+
+          if (response.ok) {
+            // Registration successful!
+            console.log('✅ Registration successful:', result);
+            
+            // Show success notification
+            showNotification('✅ Account created successfully! Redirecting to login...', 'success');
+            
+            // Store user info temporarily for login page
+            sessionStorage.setItem('registeredEmail', email);
+            sessionStorage.setItem('registeredUsername', username);
+            
+            // Redirect to login page after 2 seconds
+            setTimeout(() => {
+              window.location.href = 'login_page.html';
+            }, 2000);
+            
+          } else {
+            // Registration failed
+            console.error('❌ Registration failed:', result);
+            handleRegistrationError(result);
+          }
+
+        } catch (error) {
+          console.error('❌ Network error during registration:', error);
+          showNotification('❌ Network error. Please check your connection and try again.', 'error');
+        } finally {
+          // Reset button state
+          setButtonLoading(false);
+        }
+      });
+
+      // ========================================================================
+      // HELPER FUNCTIONS
+      // ========================================================================
+
+      /**
+       * Handle registration errors from server
+       */
+      function handleRegistrationError(result) {
+        const error = result.error || 'Registration failed';
+        
+        if (error.toLowerCase().includes('email') || error.toLowerCase().includes('already exists')) {
+          showFieldError('emailError', 'This email is already registered');
+        } else if (error.toLowerCase().includes('username')) {
+          showFieldError('usernameError', 'This username is already taken');
+        } else {
+          showNotification(`❌ Registration failed: ${error}`, 'error');
+        }
       }
 
-      if (!email.match(/^[^@\s]+@[^@\s]+\.[^@\s]+$/)) {
-        document.getElementById('emailError').style.display = 'block';
-        valid = false;
+      /**
+       * Show field-specific error
+       */
+      function showFieldError(errorId, message) {
+        const errorElement = document.getElementById(errorId);
+        const inputId = errorId.replace('Error', '');
+        const inputElement = document.getElementById(inputId);
+        
+        if (errorElement && inputElement) {
+          errorElement.textContent = message;
+          errorElement.classList.add('show');
+          inputElement.classList.add('error');
+        }
       }
 
-      if (!password) {
-        document.getElementById('passwordError').style.display = 'block';
-        valid = false;
+      /**
+       * Clear all error states
+       */
+      function clearAllErrors() {
+        document.querySelectorAll('.error').forEach(el => {
+          el.classList.remove('show');
+        });
+        document.querySelectorAll('input').forEach(input => {
+          input.classList.remove('error');
+        });
       }
 
-      if (password !== confirmPassword) {
-        document.getElementById('confirmError').style.display = 'block';
-        valid = false;
+      /**
+       * Set button loading state
+       */
+      function setButtonLoading(isLoading) {
+        if (isLoading) {
+          submitButton.disabled = true;
+          submitButton.textContent = 'Creating Account...';
+          submitButton.style.opacity = '0.7';
+        } else {
+          submitButton.disabled = false;
+          submitButton.textContent = 'Register';
+          submitButton.style.opacity = '1';
+        }
       }
 
-      if (!terms) {
-        document.getElementById('termsError').style.display = 'block';
-        valid = false;
-      }
+      /**
+       * Show notification popup
+       */
+      function showNotification(message, type) {
+        // Remove existing notifications
+        const existing = document.querySelector('.temp-notification');
+        if (existing) {
+          existing.remove();
+        }
 
-      if (valid) {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = 'temp-notification';
+
+        // Set colors based on type
+        if (type === 'success') {
+          notification.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        } else if (type === 'error') {
+          notification.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        } else {
+          notification.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+        }
+
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        // Auto remove notification after 5 seconds
         setTimeout(() => {
-          alert("✅ Registration successful! (Ready to connect to backend API)");
-        }, 600);
+          notification.style.animation = 'slideOutToRight 0.3s ease-in';
+          setTimeout(() => {
+            if (notification.parentNode) {
+              notification.remove();
+            }
+          }, 300);
+        }, 5000);
       }
     });
   </script>
