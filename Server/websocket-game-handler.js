@@ -83,7 +83,13 @@ class WebSocketGameHandler {
             });
         }, 30000); // Check every 30 seconds
     }
-
+/**
+ * Set Byron's engine reference
+ * @param {Object} engine - Byron's rules engine
+ */
+setByronEngine(engine) {
+    this.byronEngine = engine;
+}
     /**
      * Extract user ID from WebSocket request
      * @param {Object} req - HTTP request object
@@ -130,12 +136,50 @@ class WebSocketGameHandler {
             case 'request_game_state':
                 await this.handleGameStateRequest(ws, message);
                 break;
+            case 'get_legal_moves':
+                await this.handleLegalMovesRequest(ws, message);
+                break;
+            case 'legal_moves':
+            handleLegalMovesResponse(data);
+            break;
             default:
                 console.log(`❓ Unknown message type: ${message.type}`);
                 this.sendError(ws, 'Unknown message type');
         }
+        
     }
-
+    async handleLegalMovesResponse(data) {
+    gameState.legalMoves = data.moves || [];
+    highlightLegalMoves();
+    }
+    /**
+ * Handle legal moves request using Byron's engine
+ * @param {WebSocket} ws - WebSocket connection
+ * @param {Object} message - Legal moves request
+ */
+    async handleLegalMovesRequest(ws, message) {
+        const { gameId, square, currentFen } = message;
+        
+        try {
+            // Import Byron's engine if not already imported
+            const { validateMove, getLegalMoves } = require('../backend/src/engine/index');
+            
+            // Get legal moves from Byron's engine
+            const legalMoves = await getLegalMoves(currentFen, square);
+            
+            this.sendMessage(ws, {
+                type: 'legal_moves',
+                square: square,
+                moves: legalMoves
+            });
+            
+            console.log(`🎯 Legal moves calculated for ${square}: ${legalMoves.length} moves`);
+            
+        } catch (error) {
+            console.error('❌ Error getting legal moves:', error);
+            this.sendError(ws, 'Failed to calculate legal moves');
+        }
+    }
     /**
      * Handle player joining a game
      * @param {WebSocket} ws - WebSocket connection
