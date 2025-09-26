@@ -1,8 +1,3 @@
-<script type = "module">
-    import './common/api.js';
-    import './common/ui.js';
-    import './common/websocket.js';
-</script>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -396,26 +391,6 @@
             <form class="login-form" id="registerForm" style="display: none;">
                 <h2>Create Account</h2>
                 <p>Join the Los Alamos Chess community</p>
-
-
-                <div class="form-group">
-                    <label for="reg-password">Password</label>
-                    <input type="password" id="reg-password" name="password" required placeholder="Create a strong password" maxlength="30">
-                    <div class="error-message" id="reg-password-error"></div>
-
-                    <!-- Live password rules checklist -->
-                    <ul id="password-rules" style="list-style:none; padding:5px 0; font-size:13px; color:#666;">
-                        <li id="rule-length">✘ At least 8 characters</li>
-                        <li id="rule-lower">✘ Contains a lowercase letter</li>
-                        <li id="rule-upper">✘ Contains an uppercase letter</li>
-                        <li id="rule-number">✘ Contains a number</li>
-                    </ul>
-                </div>
-
-                <button type="submit" class="btn-primary" id="registerBtn" disabled>
-                    Create Account
-                </button>
-
                 
                 <div class="form-group">
                     <label for="reg-username">Username</label>
@@ -450,311 +425,228 @@
     </div>
 
     <!-- Import the API module -->
-    <script type="module">
-        import { auth, APIError } from './common/api.js';
+<script>
+// Remove the module imports and replace with direct implementation
 
-        // Password rules checklist
-        const ruleLength = document.getElementById("rule-length");
-        const ruleLower  = document.getElementById("rule-lower");
-        const ruleUpper  = document.getElementById("rule-upper");
-        const ruleNumber = document.getElementById("rule-number");
+// Form references
+const loginForm = document.getElementById('loginForm');
+const registerForm = document.getElementById('registerForm');
+const loginBtn = document.getElementById('loginBtn');
+const registerBtn = document.getElementById('registerBtn');
 
-        // Update checklist + button enable state
-        function updatePasswordChecklist() {
-            const password = regPassword.value;
+// Form switching functions
+window.showRegisterForm = function() {
+    loginForm.style.display = 'none';
+    registerForm.style.display = 'block';
+};
 
-            // Individual checks
-            const hasLength = password.length >= 8;
-            const hasLower  = /[a-z]/.test(password);
-            const hasUpper  = /[A-Z]/.test(password);
-            const hasNumber = /\d/.test(password);
+window.showLoginForm = function() {
+    registerForm.style.display = 'none';
+    loginForm.style.display = 'block';
+};
 
-            // Update UI
-            ruleLength.textContent = (hasLength ? "✔" : "✘") + " At least 8 characters";
-            ruleLower.textContent  = (hasLower  ? "✔" : "✘") + " Contains a lowercase letter";
-            ruleUpper.textContent  = (hasUpper  ? "✔" : "✘") + " Contains an uppercase letter";
-            ruleNumber.textContent = (hasNumber ? "✔" : "✘") + " Contains a number";
+// Login form handler
+loginForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    
+    const formData = new FormData(loginForm);
+    const email = formData.get('email');
+    const password = formData.get('password');
 
-            // Update colors
-            [ [ruleLength, hasLength], [ruleLower, hasLower], [ruleUpper, hasUpper], [ruleNumber, hasNumber] ]
-            .forEach(([el, ok]) => { el.style.color = ok ? "green" : "red"; });
+    // Clear previous errors
+    clearErrors();
+    
+    // Show loading
+    setLoading(loginBtn, true);
 
-            // Re-check if the register button can be enabled
-            updateRegisterButton();
-        }
-
-        // Hook into typing on password
-        regPassword.addEventListener("input", updatePasswordChecklist);
-
-        // Run once on load to set initial state
-        updatePasswordChecklist();
-
-
-
-        // Live password validation for registration form
-        const regPassword = document.getElementById('reg-password');
-        const regEmail = document.getElementById('reg-email');
-        const regUsername = document.getElementById('reg-username');
-
-        function canEnableRegister() {
-            const username = regUsername.value.trim();
-            const email = regEmail.value.trim();
-            const password = regPassword.value.trim();
-
-            // Same rules as validateRegistration but lighter (only for enabling button)
-            const usernameOk = /^[a-zA-Z0-9_]{3,20}$/.test(username);
-            const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-            const passwordOk = password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password);
-
-            return usernameOk && emailOk && passwordOk;
-        }
-
-        function updateRegisterButton() {
-            registerBtn.disabled = !canEnableRegister();
-        }
-
-        // Listen for typing in the registration fields
-        [regUsername, regEmail, regPassword].forEach(input => {
-            input.addEventListener('input', updateRegisterButton);
+    try {
+        console.log('Attempting login...');
+        
+        // Direct fetch to your server's login endpoint
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ email, password })
         });
-
-
-        // Form references
-        const loginForm = document.getElementById('loginForm');
-        const registerForm = document.getElementById('registerForm');
-        const loginBtn = document.getElementById('loginBtn');
-        const registerBtn = document.getElementById('registerBtn');
-
-        // Form switching
-        window.showRegisterForm = function() {
-            loginForm.style.display = 'none';
-            registerForm.style.display = 'block';
-        };
-
-        window.showLoginForm = function() {
-            registerForm.style.display = 'none';
-            loginForm.style.display = 'block';
-        };
-
-        // Login form handler
-        loginForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
+        
+        const result = await response.json();
+        
+        if (response.ok && result.accessToken) {
+            console.log('Login successful:', result.user.username);
             
-            const formData = new FormData(loginForm);
-            const email = formData.get('email');
-            const password = formData.get('password');
-
-            // Clear previous errors
-            clearErrors('login');
+            // Store authentication data in localStorage
+            localStorage.setItem('accessToken', result.accessToken);
+            localStorage.setItem('refreshToken', result.refreshToken);
             
-            // Show loading
-            setLoading(loginBtn, true);
+            // Store user data for game view (THIS IS THE KEY FIX)
+            localStorage.setItem('username', result.user.username);
+            localStorage.setItem('rating', result.user.rating);
+            localStorage.setItem('userId', result.user.id);
+            localStorage.setItem('email', result.user.email);
+            localStorage.setItem('loginTime', Date.now().toString());
+            
+            showNotification(`Welcome back, ${result.user.username}!`, 'success');
+            
+            // Redirect to dashboard
+            setTimeout(() => {
+                window.location.href = 'dashboard_page.html';
+            }, 1500);
+            
+        } else {
+            showNotification(result.error || 'Login failed', 'error');
+        }
 
-            try {
-                console.log('Attempting login...');
-                const response = await auth.login(email, password);
-                
-                            // Fix #1 - Login success redirect
-                console.log('Login successful:', response);
-                showNotification('Login successful!', 'success');
+    } catch (error) {
+        console.error('Login failed:', error);
+        showNotification('Network error. Please try again.', 'error');
+    } finally {
+        setLoading(loginBtn, false);
+    }
+});
 
-                // Redirect to dashboard after short delay
-                setTimeout(() => {
-                    window.location.href = 'dashboard_page.html';  // ✅ Fixed
-                }, 1000);
+// Registration form handler
+registerForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    
+    const formData = new FormData(registerForm);
+    const userData = {
+        username: formData.get('username'),
+        email: formData.get('email'),
+        password: formData.get('password')
+    };
 
-                // Fix #2 - Already authenticated redirect  
-                showNotification(`Welcome back, ${user.username}!`, 'success');
-                setTimeout(() => {
-                    window.location.href = 'dashboard_page.html';  // ✅ Fixed
-                }, 1000);
+    clearErrors();
+    
+    if (!validateRegistration(userData)) {
+        return;
+    }
 
-            } catch (error) {
-                console.error('Login failed:', error);
-                
-                if (error instanceof APIError) {
-                    handleLoginError(error);
-                } else {
-                    showNotification('Network error. Please try again.', 'error');
-                }
-            } finally {
-                setLoading(loginBtn, false);
-            }
+    setLoading(registerBtn, true);
+
+    try {
+        console.log('Attempting registration...');
+        
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(userData)
         });
-
-        // Registration form handler
-        registerForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            console.log('Registration successful:', result);
+            showNotification('Account created successfully!', 'success');
             
-            const formData = new FormData(registerForm);
-            const userData = {
-                username: formData.get('username'),
-                email: formData.get('email'),
-                password: formData.get('password')
-            };
-
-            // Clear previous errors
-            clearErrors('register');
-            
-            // Client-side validation
-            if (!validateRegistration(userData)) {
-                return;
-            }
-
-            // Show loading
-            setLoading(registerBtn, true);
-
-            try {
-                console.log('Attempting registration...');
-                const response = await auth.register(userData);
-                
-                console.log('Registration successful:', response);
-                showNotification('Account created successfully!', 'success');
-                
-                // Switch to login form
-                setTimeout(() => {
-                    showLoginForm();
-                    // Pre-fill email
-                    document.getElementById('email').value = userData.email;
-                }, 1500);
-
-            } catch (error) {
-                console.error('Registration failed:', error);
-                
-                if (error instanceof APIError) {
-                    handleRegistrationError(error);
-                } else {
-                    showNotification('Network error. Please try again.', 'error');
-                }
-            } finally {
-                setLoading(registerBtn, false);
-            }
-        });
-
-        // Handle login errors
-        function handleLoginError(error) {
-            const errorMessages = {
-                'INVALID_CREDENTIALS': 'Invalid email or password',
-                'TOO_MANY_ATTEMPTS': 'Too many failed attempts. Please try again in 15 minutes',
-                'MISSING_CREDENTIALS': 'Please enter both email and password'
-            };
-
-            const message = errorMessages[error.data?.error] || error.message || 'Login failed';
-            showFieldError('password', message);
-            showNotification(message, 'error');
+            // Switch to login form and pre-fill email
+            setTimeout(() => {
+                showLoginForm();
+                document.getElementById('email').value = userData.email;
+            }, 1500);
+        } else {
+            showNotification(result.error || 'Registration failed', 'error');
         }
 
-        // Handle registration errors
-        function handleRegistrationError(error) {
-            const errorData = error.data || {};
-            
-            const fieldErrors = {
-                'INVALID_EMAIL': 'email',
-                'EMAIL_EXISTS': 'email', 
-                'INVALID_USERNAME': 'username',
-                'USERNAME_EXISTS': 'username',
-                'WEAK_PASSWORD': 'password'
-            };
+    } catch (error) {
+        console.error('Registration failed:', error);
+        showNotification('Network error. Please try again.', 'error');
+    } finally {
+        setLoading(registerBtn, false);
+    }
+});
 
-            const errorMessages = {
-                'INVALID_EMAIL': 'Please provide a valid email address',
-                'EMAIL_EXISTS': 'An account with this email already exists',
-                'INVALID_USERNAME': 'Username must be 3-20 characters, letters/numbers/underscore only',
-                'USERNAME_EXISTS': 'This username is already taken',
-                'WEAK_PASSWORD': 'Password must be at least 8 characters with uppercase, lowercase, and number'
-            };
+// Utility functions
+function validateRegistration(userData) {
+    let isValid = true;
 
-            const errorType = errorData.error;
-            const field = fieldErrors[errorType];
-            const message = errorMessages[errorType] || error.message || 'Registration failed';
+    const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
+    if (!usernameRegex.test(userData.username)) {
+        showFieldError('reg-username', 'Username must be 3-20 characters');
+        isValid = false;
+    }
 
-            if (field) {
-                showFieldError(`reg-${field}`, message);
-            }
-            
-            showNotification(message, 'error');
-        }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(userData.email)) {
+        showFieldError('reg-email', 'Please enter a valid email address');
+        isValid = false;
+    }
 
-        // Client-side registration validation
-        function validateRegistration(userData) {
-            let isValid = true;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(userData.password)) {
+        showFieldError('reg-password', 'Password must be at least 8 characters with uppercase, lowercase, and number');
+        isValid = false;
+    }
 
-            // Username validation
-            const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
-            if (!usernameRegex.test(userData.username)) {
-                showFieldError('reg-username', 'Username must be 3-20 characters, letters/numbers/underscore only');
-                isValid = false;
-            }
+    return isValid;
+}
 
-            // Email validation
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(userData.email)) {
-                showFieldError('reg-email', 'Please enter a valid email address');
-                isValid = false;
-            }
+function showFieldError(fieldId, message) {
+    const field = document.getElementById(fieldId);
+    const errorElement = document.getElementById(`${fieldId}-error`);
+    
+    if (field && errorElement) {
+        field.classList.add('error');
+        errorElement.textContent = message;
+        errorElement.classList.add('show');
+    }
+}
 
-            // Password validation
-            const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
-            if (!passwordRegex.test(userData.password)) {
-                showFieldError('reg-password', 'Password must be at least 8 characters with uppercase, lowercase, and number');
-                isValid = false;
-            }
+function clearErrors() {
+    document.querySelectorAll('.error-message').forEach(el => {
+        el.classList.remove('show');
+        el.textContent = '';
+    });
+    document.querySelectorAll('input.error').forEach(el => {
+        el.classList.remove('error');
+    });
+}
 
-            return isValid;
-        }
+function setLoading(button, loading) {
+    button.disabled = loading;
+    if (loading) {
+        button.innerHTML = '<span class="loading"></span>Loading...';
+    } else {
+        button.textContent = button.id === 'loginBtn' ? 'Login' : 'Create Account';
+    }
+}
 
-        // Utility functions
-        function showFieldError(fieldId, message) {
-            const field = document.getElementById(fieldId);
-            const errorElement = document.getElementById(`${fieldId}-error`);
-            
-            if (field && errorElement) {
-                field.classList.add('error');
-                errorElement.textContent = message;
-                errorElement.classList.add('show');
-            }
-        }
+function showNotification(message, type) {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification ${type} show`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
 
-        // Add before the login form handler
-        function clearErrors(form) {
-            console.log('Clearing errors for:', form);
-        }
+// Social login placeholder
+window.socialLogin = function(provider) {
+    showNotification(`${provider} login coming soon!`, 'error');
+};
 
-        function setLoading(button, loading) {
-            button.disabled = loading;
-            button.textContent = loading ? 'Loading...' : (button.id === 'loginBtn' ? 'Sign In' : 'Create Account');
-        }
-
-        function showNotification(message, type) {
-            console.log(`${type}: ${message}`);
-            alert(`${type}: ${message}`);
-        }
-
-        // Social login handlers (placeholder)
-        window.socialLogin = function(provider) {
-            showNotification(`${provider} login coming soon!`, 'error');
-        };
-
-        // Check if already authenticated on page load
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                // Import auth functions
-                const { isAuthenticated, getCurrentUser } = await import('./common/api.js');
-                
-                if (isAuthenticated()) {
-                    const user = getCurrentUser();
-                    console.log('User already authenticated:', user);
-                    
-                    // Redirect to game dashboard
-                    showNotification(`Welcome back, ${user.username}!`, 'success');
-                    setTimeout(() => {
-                        window.location.href = 'dashboard_page.html';  
-                    }, 1000);
-                }
-            } catch (error) {
-                console.log('No valid authentication found');
-            }
-        });
-    </script>
+// Check if already authenticated on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const username = localStorage.getItem('username');
+    const accessToken = localStorage.getItem('accessToken');
+    
+    if (username && accessToken) {
+        console.log('User already authenticated:', username);
+        showNotification(`Welcome back, ${username}!`, 'success');
+        setTimeout(() => {
+            window.location.href = 'dashboard_page.html';
+        }, 1000);
+    }
+});
+</script>
 </body>
 </html>

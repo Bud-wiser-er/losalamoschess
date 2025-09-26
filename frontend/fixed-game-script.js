@@ -1,5 +1,5 @@
 /**
- * FIXED GAME SCRIPT FOR LOS ALAMOS CHESS
+ * CORRECTED FIXED GAME SCRIPT FOR LOS ALAMOS CHESS
  * 
  * Purpose: Complete game logic for 6x6 Los Alamos Chess implementation
  * Integrates: Database, Security, Game Engine, Frontend UI
@@ -7,7 +7,7 @@
  * Input: User interactions (clicks, moves, chat)
  * Output: Updated game state, board display, move history, timers
  * 
- * Dependencies: WebSocket connection, authentication, move validation
+ * File Location: /frontend/fixed-game-script.js
  */
 
 // Game state management
@@ -195,27 +195,44 @@ function selectSquare(squareId) {
     const square = document.getElementById(squareId);
     square.classList.add('selected');
     
-    // Get legal moves (simplified for demo)
+    // Get legal moves using Byron's engine
     calculateLegalMoves(squareId);
-    highlightLegalMoves();
+}
+
+function calculateLegalMoves(squareId) {
+    gameState.legalMoves = [];
+    
+    console.log('Requesting legal moves for:', squareId); // Debug
+    
+    if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
+        const message = {
+            type: 'get_legal_moves',
+            gameId: gameState.gameId,
+            square: squareId,
+            currentFen: generateCurrentFEN()
+        };
+        
+        console.log('Sending WebSocket message:', message); // Debug
+        gameSocket.send(JSON.stringify(message));
+    } else {
+        console.warn('WebSocket not available - using fallback move calculation');
+        calculateBasicLegalMoves(squareId);
+        highlightLegalMoves();
+    }
 }
 
 /**
- * Calculate legal moves for selected piece
+ * Fallback: Basic legal move calculation
  * @param {string} squareId - Selected square
  */
-function calculateLegalMoves(squareId) {
+function calculateBasicLegalMoves(squareId) {
     const piece = gameState.board[squareId];
     if (!piece) return;
     
-    gameState.legalMoves = [];
-    
-    // Simplified move calculation for demo
-    // In production, this would call the backend engine
     const file = squareId.charCodeAt(0) - 97; // 0-5
     const rank = parseInt(squareId[1]); // 1-6
     
-    // Basic move patterns (simplified)
+    // Basic move patterns for different pieces
     const directions = getBasicMoveDirections(piece);
     
     for (const [dx, dy] of directions) {
@@ -234,6 +251,54 @@ function calculateLegalMoves(squareId) {
 }
 
 /**
+ * Generate current FEN from board state
+ */
+function generateCurrentFEN() {
+    let fen = '';
+    for (let rank = 6; rank >= 1; rank--) {
+        let rankStr = '';
+        let emptyCount = 0;
+        
+        for (let file = 0; file < 6; file++) {
+            const square = String.fromCharCode(97 + file) + rank;
+            const piece = gameState.board[square];
+            
+            if (piece) {
+                if (emptyCount > 0) {
+                    rankStr += emptyCount;
+                    emptyCount = 0;
+                }
+                const fenPiece = unicodeToFEN(piece);
+                rankStr += fenPiece;
+            } else {
+                emptyCount++;
+            }
+        }
+        
+        if (emptyCount > 0) {
+            rankStr += emptyCount;
+        }
+        
+        fen += rankStr;
+        if (rank > 1) fen += '/';
+    }
+    
+    fen += ` ${gameState.currentPlayer === 'white' ? 'w' : 'b'} - - 0 ${Math.floor(gameState.moveHistory.length / 2) + 1}`;
+    return fen;
+}
+
+/**
+ * Convert Unicode piece symbols to FEN notation
+ */
+function unicodeToFEN(unicode) {
+    const mapping = {
+        '♔': 'K', '♕': 'Q', '♖': 'R', '♘': 'N', '♙': 'P',
+        '♚': 'k', '♛': 'q', '♜': 'r', '♞': 'n', '♟': 'p'
+    };
+    return mapping[unicode] || '';
+}
+
+/**
  * Get basic move directions for piece type
  * @param {string} piece - Piece symbol
  * @returns {Array} Array of [dx, dy] direction vectors
@@ -247,11 +312,11 @@ function getBasicMoveDirections(piece) {
     const kings = ['♔', '♚'];
     
     if (whitePawns.includes(piece)) {
-        return [[0, 1], [-1, 1], [1, 1]]; // Forward and captures
+        return [[0, 1]]; // Only forward for pawns (captures handled separately)
     } else if (blackPawns.includes(piece)) {
-        return [[0, -1], [-1, -1], [1, -1]]; // Forward and captures
+        return [[0, -1]]; // Only forward for pawns
     } else if (rooks.includes(piece)) {
-        return [[0, 1], [0, -1], [1, 0], [-1, 0]]; // Vertical and horizontal
+        return [[0, 1], [0, -1], [1, 0], [-1, 0]];
     } else if (knights.includes(piece)) {
         return [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [1, -2], [-1, 2], [-1, -2]];
     } else if (queens.includes(piece)) {
@@ -279,14 +344,38 @@ function isSameColor(piece1, piece2) {
  * Highlight legal move squares
  */
 function highlightLegalMoves() {
-    gameState.legalMoves.forEach(squareId => {
-        const square = document.getElementById(squareId);
-        const targetPiece = gameState.board[squareId];
+    console.log('Highlighting moves:', gameState.legalMoves); // Debug
+    
+    gameState.legalMoves.forEach(move => {
+        let targetSquare;
         
-        if (targetPiece) {
-            square.classList.add('capture-move');
+        // Handle different move formats
+        if (move.length === 4) {
+            // UCI format like "c2c3" - extract destination
+            targetSquare = move.substring(2, 4);
+        } else if (move.length === 2) {
+            // Already just the destination square like "c3"
+            targetSquare = move;
         } else {
-            square.classList.add('valid-move');
+            console.warn('Unknown move format:', move);
+            return;
+        }
+        
+        console.log('Looking for square:', targetSquare); // Debug
+        
+        const square = document.getElementById(targetSquare);
+        if (square) {
+            const targetPiece = gameState.board[targetSquare];
+            
+            if (targetPiece) {
+                square.classList.add('capture-move');
+                console.log('Added capture highlight to:', targetSquare);
+            } else {
+                square.classList.add('valid-move');
+                console.log('Added move highlight to:', targetSquare);
+            }
+        } else {
+            console.error('Square not found:', targetSquare);
         }
     });
 }
@@ -358,12 +447,10 @@ function makeMove(from, to) {
  * @param {string} to - Destination square
  */
 function updateLastMoveHighlight(from, to) {
-    // Remove previous highlights
     document.querySelectorAll('.last-move').forEach(square => {
         square.classList.remove('last-move');
     });
     
-    // Add new highlights
     document.getElementById(from).classList.add('last-move');
     document.getElementById(to).classList.add('last-move');
 }
@@ -402,7 +489,6 @@ function addMoveToHistory(from, to, piece, isCapture) {
     
     // Update UI
     if (isWhiteMove) {
-        // Create new move pair
         const movePair = document.createElement('div');
         movePair.className = 'move-pair';
         movePair.innerHTML = `
@@ -412,16 +498,12 @@ function addMoveToHistory(from, to, piece, isCapture) {
         `;
         movesList.appendChild(movePair);
     } else {
-        // Complete the move pair
         const lastPair = movesList.lastElementChild;
         const blackMove = lastPair.querySelector('.move:last-child');
         blackMove.textContent = moveNotation;
     }
     
-    // Scroll to bottom
     movesList.scrollTop = movesList.scrollHeight;
-    
-    // Update move count display
     updateMoveCount();
 }
 
@@ -431,7 +513,6 @@ function addMoveToHistory(from, to, piece, isCapture) {
 function switchTurn() {
     gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
     
-    // Update UI indicators
     const playerCard = document.getElementById('player-card');
     const opponentCard = document.getElementById('opponent-card');
     
@@ -444,13 +525,11 @@ function switchTurn() {
         playerCard.classList.remove('active');
     }
     
-    // Update current turn display
     const currentTurnElement = document.getElementById('current-turn');
     if (currentTurnElement) {
         currentTurnElement.textContent = gameState.currentPlayer.charAt(0).toUpperCase() + gameState.currentPlayer.slice(1);
     }
     
-    // Switch timers
     switchTimers();
 }
 
@@ -460,8 +539,6 @@ function switchTurn() {
 function initializeTimers() {
     updateTimerDisplay('white', gameState.timeLeft.white);
     updateTimerDisplay('black', gameState.timeLeft.black);
-    
-    // Start timer for current player
     startTimer(gameState.currentPlayer);
 }
 
@@ -470,7 +547,6 @@ function initializeTimers() {
  * @param {string} color - 'white' or 'black'
  */
 function startTimer(color) {
-    // Clear existing timers
     clearInterval(gameTimers.whiteInterval);
     clearInterval(gameTimers.blackInterval);
     
@@ -490,7 +566,7 @@ function startTimer(color) {
         }
         
         updateTimerDisplay(color, gameState.timeLeft[color]);
-    }, 100); // Update every 100ms for smooth countdown
+    }, 100);
     
     if (color === 'white') {
         gameTimers.whiteInterval = timerInterval;
@@ -522,11 +598,10 @@ function updateTimerDisplay(color, timeInMs) {
     if (timerElement) {
         timerElement.textContent = formattedTime;
         
-        // Add warning classes
         timerElement.classList.remove('warning', 'critical');
-        if (timeInMs <= 30000) { // 30 seconds
+        if (timeInMs <= 30000) {
             timerElement.classList.add('critical');
-        } else if (timeInMs <= 60000) { // 1 minute
+        } else if (timeInMs <= 60000) {
             timerElement.classList.add('warning');
         }
     }
@@ -542,7 +617,6 @@ function handleTimeOut(color) {
     
     alert(`Time's up! ${winner.charAt(0).toUpperCase() + winner.slice(1)} wins by timeout.`);
     
-    // Update game status
     const gameStatusElement = document.getElementById('game-status');
     if (gameStatusElement) {
         gameStatusElement.textContent = `${winner.charAt(0).toUpperCase() + winner.slice(1)} wins - Timeout`;
@@ -563,11 +637,9 @@ function updateMoveCount() {
  * Load player information from localStorage or API
  */
 function loadPlayerInfo() {
-    // Try to get username from localStorage (set during login)
     const username = localStorage.getItem('username') || 'Player';
     const rating = localStorage.getItem('rating') || '1200';
     
-    // Update player card
     const playerNameElement = document.querySelector('#player-card .player-name');
     const playerRatingElement = document.querySelector('#player-card .player-rating');
     const playerAvatarElement = document.querySelector('#player-card .player-avatar');
@@ -576,14 +648,13 @@ function loadPlayerInfo() {
     if (playerRatingElement) playerRatingElement.textContent = `${rating} ELO`;
     if (playerAvatarElement) playerAvatarElement.textContent = username.charAt(0).toUpperCase();
     
-    console.log(`👤 Player loaded: ${username} (${rating} ELO)`);
+    console.log(`Player loaded: ${username} (${rating} ELO)`);
 }
 
 /**
  * Setup event listeners
  */
 function setupEventListeners() {
-    // Chat functionality
     const chatInput = document.getElementById('chat-input');
     const chatSend = document.querySelector('.chat-send');
     
@@ -612,7 +683,6 @@ function sendChatMessage() {
     const message = chatInput.value.trim();
     if (!message) return;
     
-    // Create message element
     const messageElement = document.createElement('div');
     messageElement.className = 'chat-message';
     messageElement.innerHTML = `
@@ -622,15 +692,12 @@ function sendChatMessage() {
     
     chatMessages.appendChild(messageElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    // Clear input
     chatInput.value = '';
     
-    // Send to server (if WebSocket is connected)
     if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
         gameSocket.send(JSON.stringify({
             type: 'chat',
-            message: message,
+            text: message,
             gameId: gameState.gameId
         }));
     }
@@ -652,14 +719,13 @@ function escapeHtml(text) {
  */
 function initializeWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = `${protocol}//${window.location.host}`;
     
     try {
         gameSocket = new WebSocket(wsUrl);
         
         gameSocket.onopen = () => {
-            console.log('🌐 WebSocket connected');
-            // Join game room
+            console.log('WebSocket connected');
             gameSocket.send(JSON.stringify({
                 type: 'join_game',
                 gameId: gameState.gameId || 'demo_game'
@@ -672,16 +738,15 @@ function initializeWebSocket() {
         };
         
         gameSocket.onclose = () => {
-            console.log('🌐 WebSocket disconnected');
-            // Attempt to reconnect after 3 seconds
+            console.log('WebSocket disconnected');
             setTimeout(initializeWebSocket, 3000);
         };
         
         gameSocket.onerror = (error) => {
-            console.error('🌐 WebSocket error:', error);
+            console.error('WebSocket error:', error);
         };
     } catch (error) {
-        console.error('🌐 Failed to initialize WebSocket:', error);
+        console.error('Failed to initialize WebSocket:', error);
     }
 }
 
@@ -691,18 +756,35 @@ function initializeWebSocket() {
  */
 function handleWebSocketMessage(data) {
     switch (data.type) {
+        case 'legal_moves':
+            handleLegalMovesResponse(data);
+            break;
         case 'move':
             handleOpponentMove(data.move);
             break;
         case 'chat':
-            handleChatMessage(data.message, data.author);
+            handleChatMessage(data.message);
             break;
-        case 'game_state':
-            updateGameState(data.state);
+        case 'connected':
+            console.log('Connected to game server');
+            break;
+        case 'error':
+            console.error('Server error:', data.message);
             break;
         default:
-            console.log('🌐 Unknown message type:', data.type);
+            console.log('Unknown message type:', data.type);
     }
+}
+
+/**
+ * Handle legal moves response from server
+ * @param {Object} data - Legal moves data
+ */
+function handleLegalMovesResponse(data) {
+    console.log('Received legal moves:', data.moves); // Debug log
+    gameState.legalMoves = data.moves || [];
+    highlightLegalMoves();
+    console.log(`Highlighting ${gameState.legalMoves.length} legal moves for ${data.square}`);
 }
 
 /**
@@ -710,7 +792,8 @@ function handleWebSocketMessage(data) {
  * @param {Object} move - Move data
  */
 function handleOpponentMove(move) {
-    // Apply the move to the board
+    if (!move || !move.from || !move.to) return;
+    
     const fromSquare = document.getElementById(move.from);
     const toSquare = document.getElementById(move.to);
     const piece = fromSquare.querySelector('.piece');
@@ -725,19 +808,32 @@ function handleOpponentMove(move) {
         
         toSquare.appendChild(piece);
         
-        // Update game state
         gameState.board[move.to] = gameState.board[move.from];
         gameState.board[move.from] = '';
         
-        // Update visual feedback
         updateLastMoveHighlight(move.from, move.to);
-        
-        // Add to move history
         addMoveToHistory(move.from, move.to, gameState.board[move.to], !!capturedPiece);
-        
-        // Switch turns
         switchTurn();
     }
+}
+
+/**
+ * Handle chat message from server
+ * @param {Object} message - Chat message data
+ */
+function handleChatMessage(message) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+    
+    const messageElement = document.createElement('div');
+    messageElement.className = 'chat-message';
+    messageElement.innerHTML = `
+        <div class="chat-author">${escapeHtml(message.author)}</div>
+        <div class="chat-text">${escapeHtml(message.text)}</div>
+    `;
+    
+    chatMessages.appendChild(messageElement);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 /**
@@ -762,13 +858,10 @@ function sendMoveToServer(from, to) {
 function triggerAIMove() {
     if (gameState.currentPlayer === gameState.playerColor) return;
     
-    // Get all possible AI moves
     const aiMoves = getAllLegalMovesForColor(gameState.currentPlayer);
     
     if (aiMoves.length > 0) {
-        // Pick random move for demo
         const randomMove = aiMoves[Math.floor(Math.random() * aiMoves.length)];
-        
         setTimeout(() => {
             makeMove(randomMove.from, randomMove.to);
         }, 500);
@@ -789,13 +882,12 @@ function getAllLegalMovesForColor(color) {
             const oldSelected = gameState.selectedSquare;
             const oldLegalMoves = [...gameState.legalMoves];
             
-            calculateLegalMoves(square);
+            calculateBasicLegalMoves(square);
             
             for (const to of gameState.legalMoves) {
                 moves.push({ from: square, to });
             }
             
-            // Restore selection state
             gameState.selectedSquare = oldSelected;
             gameState.legalMoves = oldLegalMoves;
         }
@@ -822,7 +914,6 @@ window.resign = function() {
         gameState.isGameActive = false;
         alert('You have resigned. Game over.');
         
-        // Update game status
         const gameStatusElement = document.getElementById('game-status');
         if (gameStatusElement) {
             gameStatusElement.textContent = 'Game ended - Resigned';
@@ -832,26 +923,21 @@ window.resign = function() {
 
 window.newGame = function() {
     if (confirm('Start a new game?')) {
-        // Reset game state
         gameState.board = { ...INITIAL_POSITION };
         gameState.currentPlayer = 'white';
         gameState.timeLeft = { white: 900000, black: 900000 };
         gameState.moveHistory = [];
         gameState.isGameActive = true;
         
-        // Reset UI
         setupInitialPosition();
         clearSelection();
         
-        // Reset move history
         const movesList = document.getElementById('moves-list');
         movesList.innerHTML = '<div class="no-moves"><span>No moves yet</span></div>';
         
-        // Reset timers
         initializeTimers();
-        
-        // Reset game info
         updateMoveCount();
+        
         const currentTurnElement = document.getElementById('current-turn');
         if (currentTurnElement) {
             currentTurnElement.textContent = 'White';
@@ -862,7 +948,7 @@ window.newGame = function() {
             gameStatusElement.textContent = 'Active';
         }
         
-        console.log('🎮 New game started');
+        console.log('New game started');
     }
 };
 
