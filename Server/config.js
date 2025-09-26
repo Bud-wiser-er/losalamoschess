@@ -1,138 +1,168 @@
-// config.js - Configuration utilities only (FIXED - removed circular dependencies)
+/**
+ * =============================================================================
+ * SECURE SERVER CONFIGURATION
+ * =============================================================================
+ * 
+ * PURPOSE: Secure configuration management with environment variables
+ * LOCATION: /Server/config.js
+ */
 
-// ================================================
-// config/database.js - Database configuration
-const { Pool } = require('pg');
-require('dotenv').config();
-
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 5432,
-  database: process.env.DB_NAME || 'los_alamos_chess',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // How long a client is allowed to remain idle
-  connectionTimeoutMillis: 2000, // How long to wait when connecting
-});
-
-// ================================================
-// middleware/auth.js - Authentication middleware
-const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET;
-
-const authenticate = (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (!token) {
-      return res.status(401).json({ error: 'Access token required' });
-    }
-    
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
-};
-
-const authenticateSocket = (socket, next) => {
-  try {
-    const token = socket.handshake.auth.token;
-    if (!token) {
-      return next(new Error('Authentication error'));
-    }
-    const decoded = jwt.verify(token, JWT_SECRET);
-    socket.user = decoded;
-    next();
-  } catch (error) {
-    return next(new Error('Authentication error'));  // Changed from 'Invalid token'
-  }
-};
-
-// ================================================
-// utils/logger.js - Logging utility
-const fs = require('fs');
 const path = require('path');
 
-class Logger {
-  constructor() {
-    this.logDir = path.join(__dirname, '..', 'logs');
-    this.ensureLogDirectory();
-  }
-  
-  ensureLogDirectory() {
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
+// Load environment variables
+require('dotenv').config();
+
+/**
+ * Validate required environment variables
+ */
+function validateEnvironment() {
+    const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
+    const missing = required.filter(key => !process.env[key]);
+    
+    if (missing.length > 0) {
+        console.error('❌ Missing required environment variables:');
+        missing.forEach(key => console.error(`   - ${key}`));
+        console.error('\n💡 Please create a .env file with the required variables');
+        console.error('   Run: node generate-jwt-config.js');
+        process.exit(1);
     }
-  }
-  
-  log(level, message, data = null) {
-    const timestamp = new Date().toISOString();
-    const logEntry = {
-      timestamp,
-      level: level.toUpperCase(),
-      message,
-      data
-    };
     
-    // Console output
-    console.log(`[${timestamp}] ${level.toUpperCase()}: ${message}`, data || '');
-    
-    // File output
-    const logFile = path.join(this.logDir, `${new Date().toISOString().split('T')[0]}.log`);
-    fs.appendFileSync(logFile, JSON.stringify(logEntry) + '\n');
-  }
-  
-  info(message, data) { this.log('info', message, data); }
-  warn(message, data) { this.log('warn', message, data); }
-  error(message, data) { this.log('error', message, data); }
-  debug(message, data) { this.log('debug', message, data); }
+    // Warn about insecure defaults
+    if (process.env.JWT_SECRET === 'your-secret-key-change-in-production') {
+        console.warn('⚠️  WARNING: Using default JWT_SECRET - this is insecure!');
+        console.warn('   Please generate secure tokens: node generate-jwt-config.js');
+    }
 }
 
-const logger = new Logger();
+// Validate environment on startup
+validateEnvironment();
 
-// ================================================
-// utils/validation.js - Input validation utilities
-const Joi = require('joi');
-
-const schemas = {
-  register: Joi.object({
-    username: Joi.string().alphanum().min(3).max(30).required(),
-    email: Joi.string().email().required(),
-    password: Joi.string().min(8).max(128).required()
-  }),
-  
-  login: Joi.object({
-    email: Joi.string().email().required(),
-    password: Joi.string().min(1).required()
-  }),
-  
-  move: Joi.object({
-    gameId: Joi.string().required(),
-    from: Joi.string().pattern(/^[a-f][1-6]$/).required(),
-    to: Joi.string().pattern(/^[a-f][1-6]$/).required(),
-    promotion: Joi.string().valid('q', 'r', 'n').optional()
-  })
+/**
+ * Server Configuration
+ */
+const config = {
+    // Server Settings
+    server: {
+        port: parseInt(process.env.PORT) || 3000,
+        host: process.env.HOST || 'localhost',
+        environment: process.env.NODE_ENV || 'development'
+    },
+    
+    // JWT Configuration
+    jwt: {
+        secret: process.env.JWT_SECRET,
+        refreshSecret: process.env.JWT_REFRESH_SECRET,
+        expiresIn: process.env.JWT_EXPIRES_IN || '15m',
+        refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d'
+    },
+    
+    // Security Settings
+    security: {
+        bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS) || 12,
+        sessionSecret: process.env.SESSION_SECRET || process.env.JWT_SECRET,
+        sessionMaxAge: parseInt(process.env.SESSION_MAX_AGE) || 24 * 60 * 60 * 1000, // 24 hours
+        
+        // Rate Limiting
+        rateLimit: {
+            windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) * 60 * 1000 || 15 * 60 * 1000, // 15 minutes
+            authMax: parseInt(process.env.RATE_LIMIT_AUTH_MAX) || 10,
+            apiMax: parseInt(process.env.RATE_LIMIT_API_MAX) || 100
+        }
+    },
+    
+    // CORS Configuration
+    cors: {
+        origin: process.env.CORS_ORIGIN ? 
+            process.env.CORS_ORIGIN.split(',') : 
+            ['http://localhost:3000', 'http://127.0.0.1:3000'],
+        credentials: true
+    },
+    
+    // Email Configuration
+    email: {
+        user: process.env.EMAIL_USER,
+        password: process.env.EMAIL_PASSWORD,
+        from: process.env.EMAIL_FROM || 'Los Alamos Chess <noreply@losalamoschess.com>',
+        service: process.env.EMAIL_SERVICE || 'gmail'
+    },
+    
+    // Database Configuration
+    database: {
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 5432,
+        name: process.env.DB_NAME || 'los_alamos_chess',
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || ''
+    },
+    
+    // Logging
+    logging: {
+        level: process.env.LOG_LEVEL || 'info'
+    },
+    
+    // Game Settings
+    game: {
+        timerDuration: 15 * 60, // 15 minutes in seconds
+        maxGamesPerUser: 10,
+        cleanupInterval: 60 * 60 * 1000 // 1 hour
+    }
 };
 
-const validate = (schema, data) => {
-  const { error, value } = schema.validate(data);
-  if (error) {
-    throw new Error(error.details[0].message);
-  }
-  return value;
-};
+/**
+ * Get configuration with environment-specific overrides
+ */
+function getConfig() {
+    const env = config.server.environment;
+    
+    if (env === 'production') {
+        // Production-specific overrides
+        config.security.bcryptRounds = 15; // Higher security
+        config.jwt.expiresIn = '5m'; // Shorter tokens
+        config.logging.level = 'warn'; // Less verbose logging
+    } else if (env === 'test') {
+        // Test-specific overrides
+        config.security.bcryptRounds = 4; // Faster for tests
+        config.jwt.expiresIn = '1h'; // Longer for tests
+    }
+    
+    return config;
+}
 
-// Export everything - REMOVED the circular dependency parts
-module.exports = { 
-  pool, 
-  authenticate, 
-  authenticateSocket, 
-  logger, 
-  schemas, 
-  validate 
+/**
+ * Validate configuration
+ */
+function validateConfig(config) {
+    // Check JWT secrets are not default values
+    const insecureSecrets = [
+        'your-secret-key-change-in-production',
+        'your-refresh-secret-key',
+        'changeme',
+        'secret',
+        '123456'
+    ];
+    
+    if (insecureSecrets.includes(config.jwt.secret)) {
+        throw new Error('JWT_SECRET is using an insecure default value');
+    }
+    
+    if (insecureSecrets.includes(config.jwt.refreshSecret)) {
+        throw new Error('JWT_REFRESH_SECRET is using an insecure default value');
+    }
+    
+    // Check JWT secrets are long enough
+    if (config.jwt.secret.length < 32) {
+        console.warn('⚠️  JWT_SECRET should be at least 32 characters long');
+    }
+    
+    if (config.jwt.refreshSecret.length < 32) {
+        console.warn('⚠️  JWT_REFRESH_SECRET should be at least 32 characters long');
+    }
+    
+    return true;
+}
+
+module.exports = {
+    getConfig,
+    validateConfig,
+    config: getConfig()
 };

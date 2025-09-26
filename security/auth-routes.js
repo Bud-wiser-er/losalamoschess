@@ -167,6 +167,8 @@ function createAuthRoutes(authService) {
      * POST /auth/password-reset
      * Request password reset
      */
+    // POST /auth/password-reset
+    // Request password reset - sends code to email
     router.post('/password-reset', async (req, res) => {
         try {
             const { email } = req.body;
@@ -183,6 +185,7 @@ function createAuthRoutes(authService) {
             res.json(result);
 
         } catch (error) {
+            console.error('Password reset error:', error);
             res.status(500).json({
                 error: 'PASSWORD_RESET_ERROR',
                 message: 'Failed to process password reset request'
@@ -190,6 +193,66 @@ function createAuthRoutes(authService) {
         }
     });
 
+    // POST /auth/verify-reset-code
+    // Verify the reset code sent to email
+    router.post('/verify-reset-code', async (req, res) => {
+        try {
+            const { email, code, token } = req.body;
+
+            if (!email || !code || !token) {
+                return res.status(400).json({
+                    error: 'MISSING_PARAMETERS',
+                    message: 'Email, code, and token are required'
+                });
+            }
+
+            const result = await authService.verifyResetCode(email, code, token);
+
+            if (result.success) {
+                res.json(result);
+            } else {
+                res.status(400).json(result);
+            }
+
+        } catch (error) {
+            console.error('Reset code verification error:', error);
+            res.status(500).json({
+                error: 'VERIFICATION_ERROR',
+                message: 'Failed to verify reset code'
+            });
+        }
+    });
+
+    // POST /auth/reset-password
+    // Complete the password reset
+    router.post('/reset-password', async (req, res) => {
+        try {
+            const { email, newPassword, resetToken } = req.body;
+
+            if (!email || !newPassword || !resetToken) {
+                return res.status(400).json({
+                    error: 'MISSING_PARAMETERS',
+                    message: 'Email, new password, and reset token are required'
+                });
+            }
+
+            const result = await authService.resetPassword(email, newPassword, resetToken);
+
+            if (result.success) {
+                res.json(result);
+            } else {
+                res.status(400).json(result);
+            }
+
+        } catch (error) {
+            console.error('Password reset completion error:', error);
+            res.status(500).json({
+                error: 'RESET_ERROR',
+                message: 'Failed to reset password'
+            });
+        }
+    });
+    
     /**
      * GET /auth/me
      * Get current user profile (for frontend to verify auth status)
