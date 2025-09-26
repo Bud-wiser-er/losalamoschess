@@ -3,6 +3,8 @@
  * Last Update: 21/09/2025
  * Title: AI Bot for Los Alamos Chess
  * Description: Main AI Bot class with L0-L3 difficulty levels
+ * more comments added 26/09/2025 wihtout changes t acutal code
+ * 
  */
 
 const RulesEngine = require('../engine/index');
@@ -12,6 +14,22 @@ const GreedyStrategy = require('./strategies/greedy');
 const MinimaxStrategy = require('./strategies/minimax');
 const EnhancedStrategy = require('./strategies/enhanced');
 
+/**
+ * AI bot façade that validates inputs, enumerates legal moves,
+ * and delegates move selection to the chosen strategy (L0–L3).
+ *
+ * Responsibilities:
+ *  - Validate request (FEN, level).
+ *  - Validate/parse FEN and enumerate legal moves using the rules engine.
+ *  - Run the selected strategy within a time cap (timeout safety).
+ *  - Provide a sensible fallback on timeout (best-so-far or first legal move).
+ *
+ * Strategies:
+ *  - L0: RandomStrategy     (0-ply)
+ *  - L1: GreedyStrategy     (1-ply static with tactical bonuses)
+ *  - L2: MinimaxStrategy    (depth set by constructor param, here 2)
+ *  - L3: EnhancedStrategy   (depth 3 + ordering + TT; constructor may ignore 2nd arg)
+ */
 class AIBot {
     constructor() {
         this.rulesEngine = new RulesEngine();
@@ -53,7 +71,7 @@ class AIBot {
             };
         }
         
-        // CRITICAL FIX: Validate FEN string before processing
+        // Validate FEN string before processing
         if (!this.validator.isValidFEN(fen)) {
             return {
                 ok: false,
@@ -127,6 +145,15 @@ class AIBot {
         }
     }
 
+    /**
+     * Utility: run a function with a hard timeout.
+     * Resolves with the function’s result if it finishes in time; otherwise rejects with Error('TIMEOUT').
+     *
+     * @template T
+     * @param {() => Promise<T> | T} func - Function to execute (may be sync or async).
+     * @param {number} timeoutMs - Millisecond timeout budget.
+     * @returns {Promise<T>}
+     **/
     executeWithTimeout(func, timeoutMs) {
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
