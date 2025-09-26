@@ -136,6 +136,19 @@
     .medium { color: #f59e0b; }
     .strong { color: #10b981; }
 
+    .password-checklist {
+      font-size: 0.8rem;
+      margin-top: 0.3rem;
+      text-align: left;
+      line-height: 1.4;
+    }
+    .password-checklist span {
+      display: block;
+    }
+
+    .valid { color: #10b981; }   /* green */
+    .invalid { color: #ef4444; } /* red */
+
     .checkbox-group {
       text-align: left;
       margin-bottom: 1rem;
@@ -269,16 +282,22 @@
       <div class="input-group">
         <label for="password">Password</label>
         <input type="password" id="password" maxlength="30" required>
-        <span class="toggle-password" onclick="togglePassword('password', this)">👁</span>
+        <span class="toggle-password" onclick="togglePassword('password', this)">🙈</span>
         <div class="char-counter" id="passwordCounter">0 / 30</div>
         <div class="error" id="passwordError">Password is required.</div>
         <div class="password-strength" id="strengthText"></div>
+        <div class="password-checklist" id="passwordChecklist">
+          <span id="len" class="invalid">✘ At least 8 characters</span>
+          <span id="lower" class="invalid">✘ At least one lowercase letter</span>
+          <span id="upper" class="invalid">✘ At least one uppercase letter</span>
+          <span id="num" class="invalid">✘ At least one number</span>
+        </div>
       </div>
 
       <div class="input-group">
         <label for="confirmPassword">Confirm Password</label>
         <input type="password" id="confirmPassword" maxlength="30" required>
-        <span class="toggle-password" onclick="togglePassword('confirmPassword', this)">👁</span>
+        <span class="toggle-password" onclick="togglePassword('confirmPassword', this)">🙈</span>
         <div class="char-counter" id="confirmCounter">0 / 30</div>
         <div class="error" id="confirmError">Passwords do not match.</div>
       </div>
@@ -291,7 +310,7 @@
         <div class="error" id="termsError">You must accept the terms to continue.</div>
       </div>
 
-      <button type="submit" class="btn" id="registerBtn">Register</button>
+      <button type="submit" class="btn" id="registerBtn" disabled>Register</button>
     </form>
 
     <div class="link">
@@ -348,10 +367,10 @@
       const input = document.getElementById(id);
       if (input.type === "password") {
         input.type = "text";
-        el.textContent = "🙈"; // hidden eye
+        el.textContent = "👁"; // open eye
       } else {
         input.type = "password";
-        el.textContent = "👁"; // open eye
+        el.textContent = "🙈"; // hidden eye
       }
     }
 
@@ -387,6 +406,49 @@
       strengthText.textContent = `Strength: ${strength}`;
       strengthText.className = `password-strength ${cls}`;
     });
+
+    // Validate password before you can create an account
+
+    const password = document.getElementById('password');
+    const confirmPassword = document.getElementById('confirmPassword');
+    const registerBtn = document.getElementById('registerBtn');
+    const checklist = {
+      len: document.getElementById('len'),
+      lower: document.getElementById('lower'),
+      upper: document.getElementById('upper'),
+      num: document.getElementById('num')
+    };
+
+    function validatePassword() {
+      const val = password.value;
+      let valid = true;
+
+      if (val.length >= 8) { checklist.len.textContent = "✔ At least 8 characters"; checklist.len.className = "valid"; }
+      else { checklist.len.textContent = "✘ At least 8 characters"; checklist.len.className = "invalid"; valid = false; }
+
+      if (/[a-z]/.test(val)) { checklist.lower.textContent = "✔ At least one lowercase"; checklist.lower.className = "valid"; }
+      else { checklist.lower.textContent = "✘ At least one lowercase"; checklist.lower.className = "invalid"; valid = false; }
+
+      if (/[A-Z]/.test(val)) { checklist.upper.textContent = "✔ At least one uppercase"; checklist.upper.className = "valid"; }
+      else { checklist.upper.textContent = "✘ At least one uppercase"; checklist.upper.className = "invalid"; valid = false; }
+
+      if (/\d/.test(val)) { checklist.num.textContent = "✔ At least one number"; checklist.num.className = "valid"; }
+      else { checklist.num.textContent = "✘ At least one number"; checklist.num.className = "invalid"; valid = false; }
+
+      return valid;
+    }
+
+    function validateForm() {
+      const passOk = validatePassword();
+      const confirmOk = password.value && password.value === confirmPassword.value;
+      const termsOk = document.getElementById('terms').checked;
+      registerBtn.disabled = !(passOk && confirmOk && termsOk);
+    }
+
+    password.addEventListener('input', validateForm);
+    confirmPassword.addEventListener('input', validateForm);
+    document.getElementById('terms').addEventListener('change', validateForm);
+
 
     // Modal functionality
     const termsLink = document.getElementById('termsLink');
