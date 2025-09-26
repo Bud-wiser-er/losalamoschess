@@ -1,0 +1,267 @@
+@startuml Byron_Architecture_Updated
+!define RECTANGLE class
+
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor<<main>> LightBlue
+    BackgroundColor<<strategy>> LightGreen
+    BackgroundColor<<helper>> LightYellow
+    BorderColor Black
+    ArrowColor Black
+}
+
+' ============================================
+' MAIN CLASSES
+' ============================================
+
+class RulesEngine <<main>> {
+    {field} - pieceMovement : PieceMovement
+    {field} - boardValidator : BoardValidator
+    {field} - gameStateChecker : GameStateChecker
+    {field} - constants : Constants
+    
+    {method} + RulesEngine()
+    
+    {method} + validateMove(fen: String, uci: String, options: Object) : Object
+    {method} + applyMove(fen: String, uci: String, options: Object) : Object
+    {method} + getLegalMoves(fen: String) : Array<String>
+    {method} + parseFEN(fen: String) : Object
+    {method} + generateFEN(board: Object) : String
+    {method} + checkGameStatus(board: Object) : String
+}
+
+class AIBot <<main>> {
+    {field} - strategies : Object
+    {field} - rulesEngine : RulesEngine
+    {field} - validator : BoardValidator
+    
+    {method} + AIBot()
+    
+    {method} + generateMove(request: BotRequest) : Promise<BotResponse>
+    {method} + cancelPendingRequest(gameId: String) : void
+}
+
+' ============================================
+' HELPER CLASSES
+' ============================================
+
+class PieceMovement <<helper>> {
+    {method} + isValidPawnMove(board, from, to, piece) : Boolean
+    {method} + isValidKnightMove(board, from, to) : Boolean
+    {method} + isValidRookMove(board, from, to) : Boolean
+    {method} + isValidQueenMove(board, from, to) : Boolean
+    {method} + isValidKingMove(board, from, to) : Boolean
+    {method} + canPieceAttackSquare(board, piece, square) : Boolean
+}
+
+class BoardValidator <<helper>> {
+    {method} + isValidFEN(fen: String) : Boolean
+    {method} + isValidUCI(uci: String) : Boolean
+    {method} + isValidSquare(square: String) : Boolean
+    {method} + isValidPromotion(piece: String) : Boolean
+    {method} + validateBoardDimensions(board: Object) : Boolean
+}
+
+class GameStateChecker <<helper>> {
+    {method} + isInCheck(board: Object, color: String) : Boolean
+    {method} + isCheckmate(board: Object) : Boolean
+    {method} + isStalemate(board: Object) : Boolean
+    {method} + hasLegalMoves(board: Object, color: String) : Boolean
+    {method} + canKingEscape(board: Object, color: String) : Boolean
+}
+
+class Constants <<helper>> {
+    {field} + VARIANT_RULES : Object
+    {field} + PIECE_VALUES : Object
+    {field} + BOARD_SIZE : Number
+    {field} + FILES : Array<String>
+    {field} + RANKS : Array<String>
+    {field} + INITIAL_FEN : String
+}
+
+class Evaluator <<helper>> {
+    {field} - pieceValues : Object
+    
+    {method} + evaluatePosition(fen: String) : Number
+    {method} + getMaterialScore(board: Object) : Number
+    {method} + getPositionalScore(board: Object) : Number
+    {method} + evaluateBoard(board: Object, color: String) : Number
+}
+
+' ============================================
+' STRATEGY PATTERN CLASSES
+' ============================================
+
+interface IStrategy <<strategy>> {
+    {method} + findBestMove(fen: String, msCap: Number, seed: Number) : Object
+}
+
+class RandomStrategy <<strategy>> {
+    {field} - engine : RulesEngine
+    
+    {method} + RandomStrategy(engine: RulesEngine)
+    {method} + findBestMove(fen: String, msCap: Number, seed: Number) : Object
+}
+
+class GreedyStrategy <<strategy>> {
+    {field} - engine : RulesEngine
+    {field} - evaluator : Evaluator
+    
+    {method} + GreedyStrategy(engine: RulesEngine)
+    {method} + findBestMove(fen: String, msCap: Number, seed: Number) : Object
+}
+
+class MinimaxStrategy <<strategy>> {
+    {field} - engine : RulesEngine
+    {field} - evaluator : Evaluator
+    {field} - maxDepth : Number
+    
+    {method} + MinimaxStrategy(engine: RulesEngine)
+    {method} + findBestMove(fen: String, msCap: Number, seed: Number) : Object
+    {method} - minimax(board: Object, depth: Number, alpha: Number, beta: Number, maximizing: Boolean) : Number
+    {method} - alphaBetaPruning(board: Object, depth: Number, alpha: Number, beta: Number) : Number
+}
+
+class EnhancedStrategy <<strategy>> {
+    {field} - engine : RulesEngine
+    {field} - evaluator : Evaluator
+    {field} - maxDepth : Number
+    {field} - transpositionTable : Map
+    
+    {method} + EnhancedStrategy(engine: RulesEngine)
+    {method} + findBestMove(fen: String, msCap: Number, seed: Number) : Object
+    {method} - minimax(board: Object, depth: Number, alpha: Number, beta: Number, maximizing: Boolean) : Number
+    {method} - getTransposition(key: String) : Object
+    {method} - storeTransposition(key: String, value: Object) : void
+    {method} - evaluateWithBonuses(board: Object, color: String) : Number
+}
+
+' ============================================
+' DATA TRANSFER OBJECTS
+' ============================================
+
+class BotRequest {
+    {field} + fen : String
+    {field} + level : String
+    {field} + msCap : Number
+    {field} + seed : Number
+    {field} + gameId : String
+}
+
+class BotResponse {
+    {field} + ok : Boolean
+    {field} + move : String
+    {field} + eval : Number
+    {field} + time : Number
+    {field} + error : String
+}
+
+class MoveValidation {
+    {field} + valid : Boolean
+    {field} + error : String
+    {field} + flags : Object
+    {field} + san : String
+}
+
+class BoardState {
+    {field} + squares : Array<Array<Piece>>
+    {field} + turn : String
+    {field} + castling : String
+    {field} + enPassant : String
+    {field} + halfmove : Number
+    {field} + fullmove : Number
+}
+
+' ============================================
+' RELATIONSHIPS - COMPOSITION
+' ============================================
+
+RulesEngine *-- PieceMovement : contains
+RulesEngine *-- BoardValidator : contains
+RulesEngine *-- GameStateChecker : contains
+RulesEngine *-- Constants : uses
+
+AIBot *-- RulesEngine : creates
+AIBot *-- BoardValidator : creates
+AIBot *-- "4" IStrategy : creates strategies
+
+' ============================================
+' RELATIONSHIPS - INHERITANCE
+' ============================================
+
+IStrategy <|.. RandomStrategy : implements
+IStrategy <|.. GreedyStrategy : implements
+IStrategy <|.. MinimaxStrategy : implements
+IStrategy <|.. EnhancedStrategy : implements
+
+' ============================================
+' RELATIONSHIPS - DEPENDENCIES
+' ============================================
+
+RandomStrategy ..> RulesEngine : depends on
+GreedyStrategy ..> RulesEngine : depends on
+GreedyStrategy ..> Evaluator : uses
+MinimaxStrategy ..> RulesEngine : depends on
+MinimaxStrategy ..> Evaluator : uses
+EnhancedStrategy ..> RulesEngine : depends on
+EnhancedStrategy ..> Evaluator : uses
+
+AIBot ..> BotRequest : receives
+AIBot ..> BotResponse : returns
+RulesEngine ..> MoveValidation : returns
+RulesEngine ..> BoardState : uses
+
+' ============================================
+' NOTES AND ANNOTATIONS
+' ============================================
+
+note right of RulesEngine
+  Core Rules Engine
+  - Stateless architecture
+  - Pure function design
+  - Validates Los Alamos rules:
+    • No bishops
+    • No castling  
+    • No en passant
+    • Single pawn moves only
+    • Promotion to Q/R/N only
+end note
+
+note right of AIBot
+  AI Bot with Strategy Pattern
+  - Async move generation
+  - 4 difficulty levels (L0-L3)
+  - Time-capped computation
+  - Deterministic with seed
+  - Request queue management
+end note
+
+note bottom of IStrategy
+  Strategy Pattern
+  L0: Random (beginner)
+  L1: Greedy (novice)
+  L2: Minimax depth 2 (intermediate)
+  L3: Enhanced depth 3+ (advanced)
+end note
+
+note right of Evaluator
+  Position Evaluation
+  - Material counting
+  - Positional bonuses
+  - Check detection
+  - Mate recognition
+end note
+
+note top of BotRequest
+  Request Contract
+  Sent from WebSocket layer
+  to Byron's AI Bot
+end note
+
+note top of BotResponse
+  Response Contract
+  Returned to WebSocket layer
+  for broadcasting to clients
+end note
+
+@enduml
