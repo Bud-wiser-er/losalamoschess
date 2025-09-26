@@ -396,6 +396,26 @@
             <form class="login-form" id="registerForm" style="display: none;">
                 <h2>Create Account</h2>
                 <p>Join the Los Alamos Chess community</p>
+
+
+                <div class="form-group">
+                    <label for="reg-password">Password</label>
+                    <input type="password" id="reg-password" name="password" required placeholder="Create a strong password" maxlength="30">
+                    <div class="error-message" id="reg-password-error"></div>
+
+                    <!-- Live password rules checklist -->
+                    <ul id="password-rules" style="list-style:none; padding:5px 0; font-size:13px; color:#666;">
+                        <li id="rule-length">✘ At least 8 characters</li>
+                        <li id="rule-lower">✘ Contains a lowercase letter</li>
+                        <li id="rule-upper">✘ Contains an uppercase letter</li>
+                        <li id="rule-number">✘ Contains a number</li>
+                    </ul>
+                </div>
+
+                <button type="submit" class="btn-primary" id="registerBtn" disabled>
+                    Create Account
+                </button>
+
                 
                 <div class="form-group">
                     <label for="reg-username">Username</label>
@@ -432,6 +452,72 @@
     <!-- Import the API module -->
     <script type="module">
         import { auth, APIError } from './common/api.js';
+
+        // Password rules checklist
+        const ruleLength = document.getElementById("rule-length");
+        const ruleLower  = document.getElementById("rule-lower");
+        const ruleUpper  = document.getElementById("rule-upper");
+        const ruleNumber = document.getElementById("rule-number");
+
+        // Update checklist + button enable state
+        function updatePasswordChecklist() {
+            const password = regPassword.value;
+
+            // Individual checks
+            const hasLength = password.length >= 8;
+            const hasLower  = /[a-z]/.test(password);
+            const hasUpper  = /[A-Z]/.test(password);
+            const hasNumber = /\d/.test(password);
+
+            // Update UI
+            ruleLength.textContent = (hasLength ? "✔" : "✘") + " At least 8 characters";
+            ruleLower.textContent  = (hasLower  ? "✔" : "✘") + " Contains a lowercase letter";
+            ruleUpper.textContent  = (hasUpper  ? "✔" : "✘") + " Contains an uppercase letter";
+            ruleNumber.textContent = (hasNumber ? "✔" : "✘") + " Contains a number";
+
+            // Update colors
+            [ [ruleLength, hasLength], [ruleLower, hasLower], [ruleUpper, hasUpper], [ruleNumber, hasNumber] ]
+            .forEach(([el, ok]) => { el.style.color = ok ? "green" : "red"; });
+
+            // Re-check if the register button can be enabled
+            updateRegisterButton();
+        }
+
+        // Hook into typing on password
+        regPassword.addEventListener("input", updatePasswordChecklist);
+
+        // Run once on load to set initial state
+        updatePasswordChecklist();
+
+
+
+        // Live password validation for registration form
+        const regPassword = document.getElementById('reg-password');
+        const regEmail = document.getElementById('reg-email');
+        const regUsername = document.getElementById('reg-username');
+
+        function canEnableRegister() {
+            const username = regUsername.value.trim();
+            const email = regEmail.value.trim();
+            const password = regPassword.value.trim();
+
+            // Same rules as validateRegistration but lighter (only for enabling button)
+            const usernameOk = /^[a-zA-Z0-9_]{3,20}$/.test(username);
+            const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+            const passwordOk = password.length >= 8 && /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password);
+
+            return usernameOk && emailOk && passwordOk;
+        }
+
+        function updateRegisterButton() {
+            registerBtn.disabled = !canEnableRegister();
+        }
+
+        // Listen for typing in the registration fields
+        [regUsername, regEmail, regPassword].forEach(input => {
+            input.addEventListener('input', updateRegisterButton);
+        });
+
 
         // Form references
         const loginForm = document.getElementById('loginForm');
