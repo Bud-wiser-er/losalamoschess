@@ -4,3 +4,7 @@ Logs
 *.log
 .DS_Store
 Thumbs.db
+# Chess Engine Binaries (OS-specific, downloaded separately)
+backend/bin/fairy-stockfish.exe
+backend/bin/fairy-stockfish
+backend/bin/*.exe

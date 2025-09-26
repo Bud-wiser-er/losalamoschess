@@ -19,7 +19,7 @@
     "test:integration": "npm run test:auth && npm run test:api",
     "test:complete": "npm run test:auth && npm run test:api && npm run test",
     "test:byron:file-loading": "node backend/unit-tests/test-file-loading.js",
-    "test:server":"node security_server_tester.js",
+    "test:server": "node security_server_tester.js",
     "test:byron:board-validator": "node backend/unit-tests/test-board-validator.js",
     "test:byron:piece-movement": "node backend/unit-tests/test-piece-movement.js",
     "test:byron:debug_piece_movement": "node backend/unit-tests/test-even-more-piece-movement.js",
@@ -29,7 +29,8 @@
     "test:byron:ai-stress": "node backend/unit-tests/test-ai-bot-stress.js",
     "test:byron:debug-fen": "node backend/unit-tests/debug-fen-issue.js",
     "test:byron:debug-ai": "node backend/unit-tests/debug-ai-bot.js",
-     "test:byron:all": "npm run -s test:byron:file-loading && npm run -s test:byron:board-validator && npm run -s test:byron:piece-movement && npm run -s test:byron:rules-engine && npm run -s test:byron:ai-bot && npm run -s test:byron:ai-stress && npm run -s test:byron:stress",
+    "test:byron:fairy-stockfish": "node backend/unit-tests/test-fairy-stockfish.js",
+    "test:byron:all": "npm run -s test:byron:file-loading && npm run -s test:byron:board-validator && npm run -s test:byron:piece-movement && npm run -s test:byron:rules-engine && npm run -s test:byron:ai-bot && npm run -s test:byron:ai-stress && npm run -s test:byron:stress",
     "test:byron:quick": "npm run test:byron:file-loading && npm run test:byron:board-validator",
     "db:setup": "node database/setup.js",
     "db:test": "node database/test-connection.js",
@@ -58,11 +59,21 @@
   ],
   "author": "EPE321 Team 14",
   "contributors": [
-    { "name": "Byron" },
-    { "name": "Nastasha" },
-    { "name": "Arno" },
-    { "name": "Lizzy" },
-    { "name": "Ethan" }
+    {
+      "name": "Byron"
+    },
+    {
+      "name": "Nastasha"
+    },
+    {
+      "name": "Arno"
+    },
+    {
+      "name": "Lizzy"
+    },
+    {
+      "name": "Ethan"
+    }
   ],
   "license": "MIT",
   "repository": {
@@ -80,6 +91,7 @@
     "joi": "^17.13.3",
     "jsdom": "^24.1.1",
     "jsonwebtoken": "^9.0.2",
+    "node-uci": "^1.3.4",
     "pg": "^8.12.0",
     "socket.io": "^4.7.5",
     "uuid": "^10.0.0"
@@ -101,7 +113,11 @@
     "testEnvironment": "node",
     "collectCoverage": true,
     "coverageDirectory": "coverage",
-    "coverageReporters": ["text", "lcov", "html"],
+    "coverageReporters": [
+      "text",
+      "lcov",
+      "html"
+    ],
     "testMatch": [
       "<rootDir>/unit-tests/**/*.test.js",
       "<rootDir>/unit-tests/**/*.spec.js"
@@ -111,7 +127,10 @@
       "/unit-tests/"
     ],
     "rootDir": ".",
-    "moduleFileExtensions": ["js", "json"],
+    "moduleFileExtensions": [
+      "js",
+      "json"
+    ],
     "verbose": true
   },
   "engines": {
