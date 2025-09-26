@@ -323,8 +323,8 @@ export const game = {
      * @param {Object} gameOptions - Game configuration
      * @returns {Promise<Object>} Game data
      */
-    async create(gameOptions = {}) {
-        return apiRequest('/games', {
+   async create(gameOptions = {}) {
+        return apiRequest('/api/game/create', {  // ✅ Fixed endpoint
             method: 'POST',
             body: JSON.stringify(gameOptions)
         });
@@ -357,9 +357,9 @@ export const game = {
      * @returns {Promise<Object>} Move response
      */
     async makeMove(gameId, move) {
-        return apiRequest(`/games/${gameId}/moves`, {
+        return apiRequest('/api/game/move', {  
             method: 'POST',
-            body: JSON.stringify({ move })
+            body: JSON.stringify({ gameId, move })
         });
     },
     
@@ -368,8 +368,11 @@ export const game = {
      * @param {string} gameId - Game ID
      * @returns {Promise<Array>} Legal moves
      */
-    async getLegalMoves(gameId) {
-        return apiRequest(`/games/${gameId}/legal-moves`);
+    async getLegalMoves(gameId, square) {
+        return apiRequest('/api/game/legal-moves', {  // ✅ Fixed endpoint
+            method: 'POST',
+            body: JSON.stringify({ gameId, square })
+        });
     },
     
     /**
