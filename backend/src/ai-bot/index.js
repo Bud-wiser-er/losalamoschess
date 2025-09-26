@@ -1,10 +1,9 @@
 /*
  * Author: Byron Norval
- * Last Update: 21/09/2025
+ * Last Update: 26/09/2025
  * Title: AI Bot for Los Alamos Chess
- * Description: Main AI Bot class with L0-L3 difficulty levels
- * more comments added 26/09/2025 wihtout changes t acutal code
- * 
+ * Description: Main AI Bot class with L0-L4 difficulty levels
+ * Added L4 (Fairy-Stockfish) support
  */
 
 const RulesEngine = require('../engine/index');
@@ -13,10 +12,11 @@ const RandomStrategy = require('./strategies/random');
 const GreedyStrategy = require('./strategies/greedy');
 const MinimaxStrategy = require('./strategies/minimax');
 const EnhancedStrategy = require('./strategies/enhanced');
+const L4Strategy = require('./strategies/L4Strategy');
 
 /**
  * AI bot façade that validates inputs, enumerates legal moves,
- * and delegates move selection to the chosen strategy (L0–L3).
+ * and delegates move selection to the chosen strategy (L0–L4).
  *
  * Responsibilities:
  *  - Validate request (FEN, level).
@@ -29,6 +29,7 @@ const EnhancedStrategy = require('./strategies/enhanced');
  *  - L1: GreedyStrategy     (1-ply static with tactical bonuses)
  *  - L2: MinimaxStrategy    (depth set by constructor param, here 2)
  *  - L3: EnhancedStrategy   (depth 3 + ordering + TT; constructor may ignore 2nd arg)
+ *  - L4: L4Strategy         (Fairy-Stockfish with configurable ELO)
  */
 class AIBot {
     constructor() {
@@ -38,7 +39,8 @@ class AIBot {
             'L0': new RandomStrategy(this.rulesEngine),
             'L1': new GreedyStrategy(this.rulesEngine),
             'L2': new MinimaxStrategy(this.rulesEngine, 2),
-            'L3': new EnhancedStrategy(this.rulesEngine, 3)
+            'L3': new EnhancedStrategy(this.rulesEngine, 3),
+            'L4': new L4Strategy(this.rulesEngine)
         };
     }
 
@@ -46,13 +48,14 @@ class AIBot {
      * Main interface for generating bot moves
      * @param {Object} request - Bot request object
      * @param {string} request.fen - Current board position
-     * @param {string} request.level - Difficulty level (L0-L3)
+     * @param {string} request.level - Difficulty level (L0-L4)
      * @param {number} request.msCap - Maximum time in milliseconds (default 5000)
-     * @param {number} request.seed - Optional seed for reproducible randomness
+     * @param {number} request.seed - Optional seed for L0-L3, or ELO for L4
+     * @param {number} request.elo - Optional ELO rating for L4 (1000-3000)
      * @returns {Promise<Object>} Bot response with move and metadata
      */
     async generateMove(request) {
-        const { fen, level, msCap = 5000, seed } = request;
+        const { fen, level, msCap = 5000, seed, elo } = request;
         
         // Validate request parameters
         if (!fen || !level) {
@@ -67,7 +70,7 @@ class AIBot {
             return {
                 ok: false,
                 error: 'INVALID_LEVEL',
-                details: `Invalid difficulty level: ${level}. Use L0, L1, L2, or L3`
+                details: `Invalid difficulty level: ${level}. Use L0, L1, L2, L3, or L4`
             };
         }
         
@@ -106,21 +109,31 @@ class AIBot {
             const startTime = Date.now();
             const strategy = this.strategies[level];
             
+            // For L4, use ELO parameter (or seed as fallback, or default 2000)
+            const searchSeed = level === 'L4' ? (elo || seed || 2000) : seed;
+            
             const moveResult = await this.executeWithTimeout(
-                () => strategy.findBestMove(fen, legalMoves, seed),
+                () => strategy.findBestMove(fen, legalMoves, searchSeed),
                 msCap
             );
             
             const endTime = Date.now();
             
-            return {
+            const response = {
                 ok: true,
                 move: moveResult.move,
                 evaluation: moveResult.evaluation,
                 depth: moveResult.depth,
-                nodes: moveResult.nodes,  // Fixed: was nodesSearched
+                nodes: moveResult.nodes,
                 timeMs: endTime - startTime
             };
+
+            // Include ELO in response if L4
+            if (level === 'L4' && moveResult.elo) {
+                response.elo = moveResult.elo;
+            }
+
+            return response;
         } catch (error) {
             if (error.message === 'TIMEOUT') {
                 // Return best move found so far
@@ -147,7 +160,7 @@ class AIBot {
 
     /**
      * Utility: run a function with a hard timeout.
-     * Resolves with the function’s result if it finishes in time; otherwise rejects with Error('TIMEOUT').
+     * Resolves with the function's result if it finishes in time; otherwise rejects with Error('TIMEOUT').
      *
      * @template T
      * @param {() => Promise<T> | T} func - Function to execute (may be sync or async).
@@ -170,6 +183,15 @@ class AIBot {
                     reject(error);
                 });
         });
+    }
+
+    /**
+     * Cleanup resources (important for L4 Fairy-Stockfish)
+     */
+    async cleanup() {
+        if (this.strategies.L4 && this.strategies.L4.cleanup) {
+            await this.strategies.L4.cleanup();
+        }
     }
 }
 

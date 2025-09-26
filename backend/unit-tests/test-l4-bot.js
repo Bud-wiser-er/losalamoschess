@@ -261,11 +261,8 @@ async function runL4Tests() {
     console.log('-'.repeat(70));
 
     await asyncTest('Cleanup method exists and works', async () => {
-        if (typeof aiBot.cleanup === 'function') {
-            await aiBot.cleanup();
-            return true;
-        }
-        return false;
+        await aiBot.cleanup();
+        return true;
     });
 
     // Results Summary
