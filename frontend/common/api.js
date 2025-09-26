@@ -410,8 +410,8 @@ export function getCurrentUser() {
     try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return {
-            id: payload.sub,
-            username: payload.name,
+            id: payload.sub || payload.id,
+            username: payload.username || payload.name,  // ✅ Try both properties
             roles: payload.roles || ['player'],
             seat: payload.seat
         };
