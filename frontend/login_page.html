@@ -468,12 +468,19 @@
                 console.log('Attempting login...');
                 const response = await auth.login(email, password);
                 
+                            // Fix #1 - Login success redirect
                 console.log('Login successful:', response);
                 showNotification('Login successful!', 'success');
-                
+
                 // Redirect to dashboard after short delay
                 setTimeout(() => {
-                    window.location.href = 'game_view.html';
+                    window.location.href = 'dashboard_page.html';  // ✅ Fixed
+                }, 1000);
+
+                // Fix #2 - Already authenticated redirect  
+                showNotification(`Welcome back, ${user.username}!`, 'success');
+                setTimeout(() => {
+                    window.location.href = 'dashboard_page.html';  // ✅ Fixed
                 }, 1000);
 
             } catch (error) {
@@ -655,7 +662,7 @@
                     // Redirect to game dashboard
                     showNotification(`Welcome back, ${user.username}!`, 'success');
                     setTimeout(() => {
-                        window.location.href = 'game_view.html';
+                        window.location.href = 'dashboard_page.html';  
                     }, 1000);
                 }
             } catch (error) {
