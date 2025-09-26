@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Los Alamos Chess - Game</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -17,123 +17,123 @@
         .game-header { 
             background: #1a1a1a; 
             padding: 15px 20px; 
-            display:flex; 
-            justify-content:space-between; 
-            align-items:center; 
-            box-shadow:0 2px 10px rgba(0,0,0,0.3); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); 
         }
-        .header-left { display:flex; align-items:center; gap:20px; }
+        .header-left { display: flex; align-items: center; gap: 20px; }
         .back-btn { 
-            background:transparent; 
-            border:1px solid #555; 
-            color:white; 
-            padding:8px 16px; 
-            border-radius:6px; 
-            cursor:pointer; 
-            display:flex; 
-            align-items:center; 
-            gap:8px; 
-            transition:all 0.3s; 
+            background: transparent; 
+            border: 1px solid #555; 
+            color: white; 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px; 
+            transition: all 0.3s; 
         }
-        .back-btn:hover { background:#333; border-color:#777; }
-        .game-mode { color:white; font-size:18px; font-weight:600; }
-        .game-status { color:#10b981; font-size:14px; }
-        .header-right { display:flex; gap:15px; }
+        .back-btn:hover { background: #333; border-color: #777; }
+        .game-mode { color: white; font-size: 18px; font-weight: 600; }
+        .game-status { color: #10b981; font-size: 14px; }
+        .header-right { display: flex; gap: 15px; }
         .header-btn { 
-            background:#333; 
-            border:none; 
-            color:white; 
-            padding:8px 16px; 
-            border-radius:6px; 
-            cursor:pointer; 
-            transition:all 0.3s; 
+            background: #333; 
+            border: none; 
+            color: white; 
+            padding: 8px 16px; 
+            border-radius: 6px; 
+            cursor: pointer; 
+            transition: all 0.3s; 
         }
-        .header-btn:hover { background:#444; }
+        .header-btn:hover { background: #444; }
         .header-btn.primary { 
-            background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
         }
-        .header-btn.primary:hover { transform:scale(1.05); }
+        .header-btn.primary:hover { transform: scale(1.05); }
 
         /* Main Game Container */
         .game-container { 
-            flex:1; 
-            display:flex; 
-            max-width:1400px; 
-            width:100%; 
-            margin:0 auto; 
-            padding:20px; 
-            gap:20px; 
+            flex: 1; 
+            display: flex; 
+            max-width: 1400px; 
+            width: 100%; 
+            margin: 0 auto; 
+            padding: 20px; 
+            gap: 20px; 
         }
 
         /* Left Panel - Player Info & Move History */
         .left-panel { 
-            width:300px; 
-            display:flex; 
-            flex-direction:column; 
-            gap:20px; 
+            width: 300px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
         }
 
         .player-card { 
-            background:#1a1a1a; 
-            border-radius:12px; 
-            padding:15px; 
-            display:flex; 
-            align-items:center; 
-            gap:15px; 
-            box-shadow:0 4px 6px rgba(0,0,0,0.2); 
+            background: #1a1a1a; 
+            border-radius: 12px; 
+            padding: 15px; 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2); 
             transition: all 0.3s;
         }
         .player-card.active { 
-            border:2px solid #10b981; 
-            box-shadow:0 0 20px rgba(16,185,129,0.3); 
+            border: 2px solid #10b981; 
+            box-shadow: 0 0 20px rgba(16,185,129,0.3); 
         }
         .player-avatar { 
-            width:50px; 
-            height:50px; 
-            border-radius:50%; 
-            background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); 
-            display:flex; 
-            align-items:center; 
-            justify-content:center; 
-            color:white; 
-            font-weight:bold; 
-            font-size:20px; 
+            width: 50px; 
+            height: 50px; 
+            border-radius: 50%; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            color: white; 
+            font-weight: bold; 
+            font-size: 20px; 
         }
-        .player-info { flex:1; }
-        .player-name { color:white; font-weight:600; margin-bottom:4px; }
-        .player-rating { color:#999; font-size:14px; }
+        .player-info { flex: 1; }
+        .player-name { color: white; font-weight: 600; margin-bottom: 4px; }
+        .player-rating { color: #999; font-size: 14px; }
         .player-timer { 
-            background:#2c3e50; 
-            padding:8px 12px; 
-            border-radius:6px; 
-            color:white; 
-            font-family:monospace; 
-            font-size:18px; 
-            font-weight:bold; 
+            background: #2c3e50; 
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            color: white; 
+            font-family: monospace; 
+            font-size: 18px; 
+            font-weight: bold; 
             min-width: 80px;
             text-align: center;
         }
         .player-timer.warning { 
-            background:#f59e0b; 
-            color:#1a1a1a; 
+            background: #f59e0b; 
+            color: #1a1a1a; 
         }
         .player-timer.critical { 
-            background:#ef4444; 
-            animation:pulse 1s infinite; 
+            background: #ef4444; 
+            animation: pulse 1s infinite; 
         }
 
         @keyframes pulse { 
-            0%,100% { opacity:1; } 
-            50% { opacity:0.7; } 
+            0%, 100% { opacity: 1; } 
+            50% { opacity: 0.7; } 
         }
 
         .move-history { 
-            background:#1a1a1a; 
-            border-radius:12px; 
-            padding:20px; 
-            flex:1; 
-            overflow-y:auto; 
-            box-shadow:0 4px 6px rgba(0,0,0,0.2);
+            background: #1a1a1a; 
+            border-radius: 12px; 
+            padding: 20px; 
+            flex: 1; 
+            overflow-y: auto; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             max-height: 300px;
             min-height: 200px;
         }
@@ -142,136 +142,180 @@
             color: #fff;
             margin: 0 0 15px 0;
             font-weight: bold;
-            text-align: center;
         }
 
-        .moves-list { 
-            display:flex; 
-            flex-direction:column; 
-            gap:8px; 
+        .moves-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .move-pair { 
-            display:grid; 
-            grid-template-columns:30px 1fr 1fr; 
-            gap:10px; 
-            padding:8px; 
-            border-radius:6px; 
-            background:#2c3e50; 
+        .move-pair {
+            display: grid;
+            grid-template-columns: 30px 1fr 1fr;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            background: #2c3e50;
         }
 
-        .move-number { 
-            color:#666; 
-            font-weight:bold; 
+        .move-number {
+            color: #666;
+            font-weight: bold;
         }
 
-        .move { 
-            color:#ccc; 
-            cursor:pointer; 
-            padding:4px 8px; 
-            border-radius:4px; 
-            transition:background 0.2s; 
-            font-family: monospace;
+        .move {
+            color: #ccc;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
         }
 
-        .move:hover { 
-            background:#3c4e60; 
+        .move:hover {
+            background: #3c4e60;
         }
 
-        .move.selected { 
-            background:#667eea; 
-            color:white; 
+        .move.selected {
+            background: #667eea;
+            color: white;
         }
 
         .no-moves {
+            color: #666;
             text-align: center;
             padding: 20px;
-            color: #888;
             font-style: italic;
         }
 
         /* Center - Chess Board */
         .board-container { 
-            flex:1; 
-            display:flex; 
-            flex-direction:column; 
-            align-items:center; 
-            justify-content:center; 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
         }
 
         .chess-board {
-            width:480px; 
-            height:480px; 
-            display:grid; 
-            grid-template-columns:repeat(6, 1fr); 
-            grid-template-rows:repeat(6, 1fr);
-            border: 3px solid #34495e;
+            width: 480px;
+            height: 480px;
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            border: 4px solid #1a1a1a;
             border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
-        }
-
-        .chess-square {
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            cursor:pointer;
-            transition: all 0.2s;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             position: relative;
         }
 
-        .chess-square.light {
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .square.light {
             background: #f0d9b5;
         }
 
-        .chess-square.dark {
+        .square.dark {
             background: #b58863;
         }
 
-        .chess-square:hover {
-            filter: brightness(1.1);
+        .square.selected {
+            box-shadow: inset 0 0 0 4px #667eea;
         }
 
-        .chess-square.selected {
-            box-shadow: inset 0 0 0 4px #10b981;
-            filter: brightness(1.2);
+        .square.valid-move::after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            background: rgba(102,126,234,0.5);
+            border-radius: 50%;
         }
 
-        .chess-square.legal-move {
-            box-shadow: inset 0 0 0 3px #3498db;
+        .square.capture-move::after {
+            content: '';
+            position: absolute;
+            width: 90%;
+            height: 90%;
+            border: 4px solid rgba(239,68,68,0.5);
+            border-radius: 50%;
         }
 
-        .chess-piece {
-            font-size: 40px;
-            cursor: pointer;
-            transition: transform 0.2s;
+        .square.last-move {
+            background: #829769 !important;
+        }
+
+        .square.last-move.dark {
+            background: #646f40 !important;
+        }
+
+        .piece {
+            font-size: 48px;
             user-select: none;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            cursor: grab;
+            transition: transform 0.2s;
         }
 
-        .chess-piece:hover {
+        .piece:hover {
             transform: scale(1.1);
         }
 
-        /* Right Panel - Game Controls (removed play buttons) */
+        .piece.dragging {
+            cursor: grabbing;
+            opacity: 0.5;
+        }
+
+        /* Coordinate labels */
+        .coordinates {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        .file-label {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            color: #666;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .rank-label {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            color: #666;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Right Panel - Game Info */
         .right-panel { 
-            width:300px; 
-            display:flex; 
-            flex-direction:column; 
-            gap:20px; 
+            width: 300px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
         }
 
         .game-info {
-            background:#1a1a1a; 
-            border-radius:12px; 
-            padding:20px; 
-            box-shadow:0 4px 6px rgba(0,0,0,0.2);
+            background: #1a1a1a; 
+            border-radius: 12px; 
+            padding: 20px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
 
         .game-info h3 {
             color: white;
             margin-bottom: 15px;
             text-align: center;
+            font-weight: bold;
         }
 
         .game-stats {
@@ -284,7 +328,7 @@
             display: flex;
             justify-content: space-between;
             color: #ccc;
-            padding: 5px 0;
+            padding: 8px 0;
             border-bottom: 1px solid #333;
         }
 
@@ -300,40 +344,102 @@
             color: #10b981;
         }
 
-        /* Responsive Design */
+        /* Chat Box */
+        .chat-box {
+            background: #1a1a1a;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+
+        .chat-header {
+            color: white;
+            margin-bottom: 15px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: none;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #2c3e50;
+            border-radius: 8px;
+        }
+
+        .chat-message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            background: #1a1a1a;
+        }
+
+        .chat-author {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .chat-text {
+            color: #ccc;
+            font-size: 14px;
+        }
+
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: #2c3e50;
+            border: 1px solid #444;
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .chat-send {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .chat-send:hover {
+            transform: scale(1.05);
+        }
+
+        /* Responsive */
         @media (max-width: 1200px) {
             .game-container {
                 flex-direction: column;
                 align-items: center;
             }
-            
             .left-panel, .right-panel {
                 width: 100%;
-                max-width: 480px;
+                max-width: 600px;
             }
-            
             .chess-board {
-                width: 400px;
-                height: 400px;
+                width: 360px;
+                height: 360px;
             }
-            
-            .chess-piece {
-                font-size: 32px;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .chess-board {
-                width: 320px;
-                height: 320px;
-            }
-            
-            .chess-piece {
-                font-size: 24px;
-            }
-            
-            .game-container {
-                padding: 10px;
+            .piece {
+                font-size: 36px;
             }
         }
     </style>
@@ -342,7 +448,9 @@
     <!-- Game Header -->
     <div class="game-header">
         <div class="header-left">
-            <button class="back-btn" onclick="goBack()">← Back</button>
+            <button class="back-btn" onclick="goBack()">
+                ← Back to Lobby
+            </button>
             <div>
                 <div class="game-mode">Los Alamos Chess</div>
                 <div class="game-status">● Game in Progress</div>
@@ -425,50 +533,25 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Chat Box -->
+            <div class="chat-box">
+                <div class="chat-header">Game Chat</div>
+                <div class="chat-messages" id="chat-messages">
+                    <div class="chat-message">
+                        <div class="chat-author">System</div>
+                        <div class="chat-text">Game started. Good luck!</div>
+                    </div>
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" class="chat-input" placeholder="Type a message..." id="chat-input" maxlength="100">
+                    <button class="chat-send">Send</button>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Include the fixed game script -->
+    <!-- Load the fixed game script -->
     <script src="fixed-game-script.js"></script>
-    
-    <script>
-        // Initialize the game when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('🎮 Los Alamos Chess - Game View Loaded');
-            console.log('✅ Fixed interface without pre-populated moves');
-            console.log('⏰ Working 15-minute timers implemented');
-            console.log('🔒 Security integration ready');
-            
-            // The game will be initialized by the included script
-        });
-
-        // Navigation function
-        function goBack() {
-            if (confirm('Are you sure you want to leave the game?')) {
-                // Clear any ongoing timers
-                if (window.gameState && window.gameState.timerInterval) {
-                    clearInterval(window.gameState.timerInterval);
-                }
-                
-                // Navigate back
-                if (document.referrer) {
-                    window.history.back();
-                } else {
-                    window.location.href = 'dashboard_page.html';
-                }
-            }
-        }
-
-        // Update UI helper functions
-        function updateGameInfo(key, value) {
-            const element = document.getElementById(key);
-            if (element) {
-                element.textContent = value;
-            }
-        }
-
-        // Export functions for the game script to use
-        window.updateGameInfo = updateGameInfo;
-    </script>
 </body>
 </html>

@@ -19,7 +19,9 @@ const helmet = require('helmet');
 const nodemailer = require('nodemailer');
 
 const resetCodes = new Map(); // email -> { code, token, expiry }
-
+// Add at the top with other requires
+const WebSocketGameHandler = require('./websocket-game-handler');
+const GameDatabaseManager = require('./game-database');
 // Add these functions anywhere before your routes
 function generateResetCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -869,6 +871,21 @@ app.use((error, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || 'localhost';
+
+
+// Add after your server creation but before server.listen()
+const gameHandler = new WebSocketGameHandler(server, {
+    DB_USER: process.env.DB_USER,
+    DB_HOST: process.env.DB_HOST,
+    DB_NAME: process.env.DB_NAME,
+    DB_PASSWORD: process.env.DB_PASSWORD,
+    DB_PORT: process.env.DB_PORT
+});
+
+// Add route to serve the fixed game script
+app.get('/fixed-game-script.js', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/fixed-game-script.js'));
+});
 
 server.listen(PORT, () => {
     console.log('');
