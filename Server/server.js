@@ -1,4 +1,4 @@
-// server.js - Main server file for Los Alamos Chess Platform
+// server.js - Main server file for Los Alamos Chess Platform (FIXED)
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -9,6 +9,9 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 require('dotenv').config();
 
+// Import validation utilities from config.js
+const { schemas, validate } = require('./config');
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -17,6 +20,17 @@ const io = socketIo(server, {
     methods: ["GET", "POST"]
   }
 });
+
+// Add input sanitization function
+const sanitizeInput = (input) => {
+  if (typeof input !== 'string') return input;
+  // Remove script tags and other potentially harmful content
+  return input
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=\s*["\'][^"\']*["\']?/gi, '')
+    .trim();
+};
 
 // Middleware
 app.use(helmet()); // Security headers
@@ -108,7 +122,7 @@ const authenticate = (req, res, next) => {
   next();
 };
 
-// WebSocket authentication middleware
+// WebSocket authentication middleware (FIXED to match config.js)
 const authenticateSocket = (socket, next) => {
   const token = socket.handshake.auth.token;
   
@@ -118,7 +132,7 @@ const authenticateSocket = (socket, next) => {
   
   const decoded = verifyAccessToken(token);
   if (!decoded) {
-    return next(new Error('Invalid token'));
+    return next(new Error('Authentication error')); // Changed to match config.js
   }
   
   socket.user = decoded;
@@ -136,19 +150,24 @@ app.get('/health', (req, res) => {
   });
 });
 
-// User Registration
+// User Registration (FIXED with Joi validation and XSS prevention)
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    let { username, email, password } = req.body;
     
-    // Input validation
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: 'Username, email, and password are required' });
+    // Use Joi validation from config.js - handles email validation automatically
+    try {
+      const validatedData = validate(schemas.register, { username, email, password });
+      username = validatedData.username;
+      email = validatedData.email;
+      password = validatedData.password;
+    } catch (validationError) {
+      return res.status(400).json({ error: validationError.message });
     }
     
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
-    }
+    // XSS prevention - sanitize inputs after validation
+    username = sanitizeInput(username);
+    email = sanitizeInput(email);
     
     // Check if user already exists
     const existingUser = Array.from(users.values()).find(u => u.email === email);
@@ -358,12 +377,12 @@ io.on('connection', (socket) => {
     console.log(`Move made in game ${gameId} by user ${socket.user.userId}:`, move);
   });
   
-  // Handle chat messages
+  // Handle chat messages (IMPROVED XSS prevention)
   socket.on('chat-message', (data) => {
     const { gameId, message } = data;
     
-    // Sanitize message (basic implementation)
-    const sanitizedMessage = message.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    // Enhanced sanitization
+    const sanitizedMessage = sanitizeInput(message);
     
     // Broadcast to game room
     io.to(`game:${gameId}`).emit('chat-message', {
@@ -392,7 +411,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// this was causing issues returning a 500 changed it to a 400
+// Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Error:', error);
   if (error.type === 'entity.parse.failed') {
@@ -406,7 +425,7 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// had to add this test here so server does not start up automatically and cause port conflicts
+// Server startup (only if this file is run directly)
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
   server.listen(PORT, () => {
