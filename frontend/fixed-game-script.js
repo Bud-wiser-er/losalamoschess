@@ -178,10 +178,35 @@ function handleSquareClick(event) {
 
             // Execute move locally first for immediate feedback
             const move = { from: gameState.selectedSquare, to: squareId };
+
+            // Check if this is a pawn promotion move for local execution
+            const piece = gameState.board[gameState.selectedSquare];
+            const isPawn = piece && (piece === '♙' || piece === '♟');
+            const toRank = parseInt(squareId[1]);
+            const isPromotion = isPawn && ((piece === '♙' && toRank === 6) || (piece === '♟' && toRank === 1));
+
+            if (isPromotion) {
+                move.promotion = 'q'; // Auto-promote to queen for local execution
+                console.log(`👑 Local promotion detected: ${gameState.selectedSquare} → ${squareId} (promoting to queen)`);
+            }
+
             executeConfirmedMove(move);
 
-            // Then send to server for validation
-            sendMoveToServer(gameState.selectedSquare, squareId);
+            // Then send to server for validation (with promotion info if needed)
+            if (isPromotion) {
+                // Send promotion move with UCI format
+                const uciMove = `${gameState.selectedSquare}${squareId}q`;
+                console.log(`📤 Sending promotion UCI to server: ${uciMove}`);
+                gameSocket.send(JSON.stringify({
+                    type: 'move',
+                    gameId: gameState.gameId,
+                    move: { from: gameState.selectedSquare, to: squareId, promotion: 'q' },
+                    uci: uciMove,
+                    timestamp: Date.now()
+                }));
+            } else {
+                sendMoveToServer(gameState.selectedSquare, squareId);
+            }
             clearSelection();
             return;
         }
@@ -950,6 +975,11 @@ function handleGameEnded(data) {
  */
 function handleLegalMovesResponse(data) {
     console.log('Received legal moves:', data.moves);
+    console.log(`🔍 Server returned ${data.moves.length} legal moves for square ${data.square}`);
+    if (data.square === 'b6' && data.moves.length === 0) {
+        console.log('❌ PROMOTION BUG: Server thinks promoted queen at b6 has no legal moves!');
+        console.log('🔍 Local board state at b6:', gameState.board.b6);
+    }
     gameState.legalMoves = data.moves || [];
     highlightLegalMoves();
     console.log(`Highlighting ${gameState.legalMoves.length} legal moves for ${data.square}`);
@@ -989,7 +1019,18 @@ function executeConfirmedMove(move) {
 
         toSquare.appendChild(piece);
 
-        gameState.board[move.to] = gameState.board[move.from];
+        // Update board state - use promoted piece if promotion occurred
+        if (move.promotion) {
+            const promotionPieces = {
+                white: { q: '♕', r: '♖', n: '♘' },
+                black: { q: '♛', r: '♜', n: '♞' }
+            };
+            const pieceColor = gameState.board[move.from] === '♙' ? 'white' : 'black';
+            gameState.board[move.to] = promotionPieces[pieceColor][move.promotion];
+            console.log(`🔄 Updated board state: promoted piece at ${move.to} is now ${gameState.board[move.to]}`);
+        } else {
+            gameState.board[move.to] = gameState.board[move.from];
+        }
         gameState.board[move.from] = '';
 
         updateLastMoveHighlight(move.from, move.to);
@@ -1032,10 +1073,14 @@ function sendMoveToServer(from, to) {
 
         if (isPromotion) {
             // Auto-promote to queen
+            console.log(`👑 Sending promotion move: ${from} → ${to} (promoting to queen)`);
+            const uciMove = `${from}${to}q`;
+            console.log(`📤 UCI promotion move: ${uciMove}`);
             gameSocket.send(JSON.stringify({
                 type: 'move',
                 gameId: gameState.gameId,
                 move: { from, to, promotion: 'q' },
+                uci: uciMove,
                 timestamp: Date.now()
             }));
         } else {
