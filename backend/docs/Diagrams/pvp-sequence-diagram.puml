@@ -1,0 +1,387 @@
+@startuml PvP_Implementation_Diagrams
+
+' ============================================
+' PLAYER VS PLAYER MATCHMAKING FLOW
+' ============================================
+
+@startuml PvP_Matchmaking_Flow
+title Player vs Player Matchmaking and Game Flow
+
+actor "Player 1" as P1
+actor "Player 2" as P2
+participant "Dashboard\nFrontend" as FE1
+participant "Dashboard\nFrontend" as FE2
+participant "Matchmaking\nService" as MM
+participant "WebSocket\nServer" as WS
+participant "Game Session\nManager" as GSM
+participant "Database\n(pvp_games)" as DB
+participant "Rating\nCalculator" as RC
+
+== Matchmaking Phase ==
+P1 -> FE1 : Click "Play Online"
+activate FE1
+FE1 -> FE1 : Show matchmaking modal
+P1 -> FE1 : Select time control\n(Blitz 3+2)
+FE1 -> WS : {type: "find_match",\n timeControl: "blitz",\n userRating: 1245}
+activate WS
+
+WS -> MM : addToQueue(player1, "blitz", 1245)
+activate MM
+MM -> DB : INSERT INTO matchmaking_queue
+activate DB
+DB --> MM : Player added to queue
+deactivate DB
+MM --> WS : {status: "queued", position: 3}
+deactivate MM
+
+WS -> FE1 : {type: "matchmaking_status",\n status: "searching"}
+FE1 -> P1 : Show "Searching for opponent..."
+deactivate WS
+
+== Second Player Joins ==
+P2 -> FE2 : Click "Play Online"
+activate FE2
+P2 -> FE2 : Select same time control
+FE2 -> WS : {type: "find_match",\n timeControl: "blitz",\n userRating: 1190}
+activate WS
+
+WS -> MM : addToQueue(player2, "blitz", 1190)
+activate MM
+MM -> MM : Check compatible opponents\n(rating difference < 200)
+MM -> MM : Match found!\nP1(1245) vs P2(1190)
+MM -> DB : DELETE FROM matchmaking_queue\nWHERE user_id IN (P1, P2)
+activate DB
+DB --> MM : Players removed from queue
+deactivate DB
+
+MM -> GSM : createGame(player1, player2, "blitz")
+activate GSM
+GSM -> GSM : Generate unique gameId
+GSM -> GSM : Assign colors randomly\n(P1=white, P2=black)
+GSM -> DB : INSERT INTO pvp_games\n{gameId, whitePlayer: P1, blackPlayer: P2,\n timeControl: "blitz", status: "waiting"}
+activate DB
+DB --> GSM : Game created successfully
+deactivate DB
+GSM --> MM : {gameId: "pvp_abc123"}
+deactivate GSM
+
+MM --> WS : {matchFound: true, gameId: "pvp_abc123"}
+deactivate MM
+
+== Game Initialization ==
+WS -> FE1 : {type: "match_found",\n gameId: "pvp_abc123",\n opponent: "Player2",\n yourColor: "white"}
+WS -> FE2 : {type: "match_found",\n gameId: "pvp_abc123",\n opponent: "Player1",\n yourColor: "black"}
+
+FE1 -> P1 : Redirect to game_view.html?gameId=pvp_abc123&mode=pvp
+FE2 -> P2 : Redirect to game_view.html?gameId=pvp_abc123&mode=pvp
+deactivate FE1
+deactivate FE2
+
+== Game Room Connection ==
+P1 -> FE1 : Load game page
+activate FE1
+FE1 -> WS : {type: "join_pvp_game",\n gameId: "pvp_abc123"}
+activate WS
+
+P2 -> FE2 : Load game page
+activate FE2
+FE2 -> WS : {type: "join_pvp_game",\n gameId: "pvp_abc123"}
+
+WS -> GSM : addPlayerToGame("pvp_abc123", player1)
+activate GSM
+GSM -> GSM : Mark player1 as connected
+GSM -> WS : checkIfGameReady("pvp_abc123")
+
+WS -> GSM : addPlayerToGame("pvp_abc123", player2)
+GSM -> GSM : Mark player2 as connected
+GSM -> GSM : Both players connected!\nStart game countdown
+
+GSM -> DB : UPDATE pvp_games\nSET status = "active",\nstarted_at = NOW()
+activate DB
+DB --> GSM : Game status updated
+deactivate DB
+
+GSM -> GSM : Initialize game timers\n(180 seconds + 2 sec increment)
+GSM --> WS : {gameReady: true, bothPlayersConnected: true}
+deactivate GSM
+
+WS -> FE1 : {type: "game_started",\n opponent: "Player2 (1190)",\n yourTime: 180, opponentTime: 180}
+WS -> FE2 : {type: "game_started",\n opponent: "Player1 (1245)",\n yourTime: 180, opponentTime: 180}
+
+FE1 -> P1 : Show board (white pieces)\n& start timers
+FE2 -> P2 : Show board (black pieces)\n& wait for opponent
+deactivate WS
+
+== Real-Time Gameplay ==
+P1 -> FE1 : Drag pawn e2 to e4
+FE1 -> FE1 : Validate move locally
+FE1 -> WS : {type: "player_move",\n gameId: "pvp_abc123",\n move: "e2e4",\n timeRemaining: 178}
+activate WS
+
+WS -> GSM : validateAndApplyMove("pvp_abc123", "e2e4", player1)
+activate GSM
+GSM -> GSM : Verify it's player1's turn
+GSM -> GSM : Validate move legality
+GSM -> GSM : Apply move to board state
+GSM -> GSM : Switch turn to player2
+GSM -> GSM : Add increment (2 seconds)\nUpdate timers
+
+GSM -> DB : UPDATE pvp_games\nSET current_fen = newFEN,\nmove_history = JSON_APPEND(...),\nwhite_time_remaining = 180
+activate DB
+DB --> GSM : Move saved successfully
+deactivate DB
+
+GSM --> WS : {moveApplied: true, newFEN: "...", san: "e4"}
+deactivate GSM
+
+WS -> FE1 : {type: "move_confirmed",\n san: "e4", yourTurn: false,\n timeUpdate: {you: 180, opponent: 180}}
+WS -> FE2 : {type: "opponent_move",\n san: "e4", fen: newFEN,\n yourTurn: true,\n timeUpdate: {you: 180, opponent: 180}}
+
+FE1 -> P1 : Update board, stop timer\nShow "Opponent's turn"
+FE2 -> P2 : Update board, start timer\nShow "Your turn"
+deactivate WS
+
+== Player 2 Response ==
+P2 -> FE2 : Make move e7e5
+FE2 -> WS : {type: "player_move",\n gameId: "pvp_abc123",\n move: "e7e5",\n timeRemaining: 177}
+activate WS
+
+WS -> GSM : validateAndApplyMove("pvp_abc123", "e7e5", player2)
+activate GSM
+GSM -> GSM : Process move (same validation flow)
+GSM -> DB : Update game state
+activate DB
+DB --> GSM : Success
+deactivate DB
+GSM --> WS : {moveApplied: true, newFEN: "...", san: "e5"}
+deactivate GSM
+
+WS -> FE1 : {type: "opponent_move",\n san: "e5", yourTurn: true}
+WS -> FE2 : {type: "move_confirmed",\n san: "e5", yourTurn: false}
+deactivate WS
+
+== Game Continuation ==
+note over P1, P2
+  Game continues with alternating moves
+  Time controls enforced by server
+  Real-time synchronization maintained
+end note
+
+== Game End Scenario ==
+P1 -> FE1 : Make checkmate move Qh8#
+FE1 -> WS : {type: "player_move",\n move: "e1h8", timeRemaining: 95}
+activate WS
+
+WS -> GSM : validateAndApplyMove("pvp_abc123", "e1h8", player1)
+activate GSM
+GSM -> GSM : Validate and apply move
+GSM -> GSM : Detect checkmate!\nGame over: white wins
+GSM -> DB : UPDATE pvp_games\nSET status = "completed",\nresult = "white_wins",\nend_reason = "checkmate",\nended_at = NOW()
+activate DB
+DB --> GSM : Game completed
+deactivate DB
+
+GSM -> RC : calculateRatingChanges(1245, 1190, "white_wins")
+activate RC
+RC -> RC : Apply ELO rating formula\nK-factor based on games played
+RC --> GSM : {whiteChange: +18, blackChange: -18}
+deactivate RC
+
+GSM -> DB : UPDATE users\nSET rating = rating + change\nWHERE id IN (player1, player2)
+activate DB
+DB --> GSM : Ratings updated
+deactivate DB
+
+GSM --> WS : {gameEnded: true, result: "white_wins",\n reason: "checkmate",\n ratingChanges: {white: +18, black: -18}}
+deactivate GSM
+
+WS -> FE1 : {type: "game_ended",\n result: "victory",\n reason: "checkmate",\n ratingChange: +18,\n newRating: 1263}
+WS -> FE2 : {type: "game_ended",\n result: "defeat",\n reason: "checkmate",\n ratingChange: -18,\n newRating: 1172}
+
+FE1 -> P1 : Show victory screen\n+ rating change
+FE2 -> P2 : Show defeat screen\n+ rating change
+deactivate WS
+deactivate FE1
+deactivate FE2
+
+@enduml
+
+' ============================================
+' PRIVATE ROOM CREATION FLOW
+' ============================================
+
+@startuml Private_Room_Flow
+title Private Room Creation and Friend Challenge
+
+actor "Host Player" as HOST
+actor "Friend Player" as FRIEND
+participant "Dashboard\nFrontend" as FE_H
+participant "Dashboard\nFrontend" as FE_F
+participant "Room\nManager" as RM
+participant "WebSocket\nServer" as WS
+participant "Database\n(private_rooms)" as DB
+
+== Room Creation ==
+HOST -> FE_H : Click "Play with Friend"
+activate FE_H
+FE_H -> FE_H : Show private room modal
+HOST -> FE_H : Configure game settings\n(Time: Rapid 10+5, Rated: Yes)
+FE_H -> WS : {type: "create_private_room",\n timeControl: "rapid",\n isRated: true,\n roomName: "Friendly Match"}
+activate WS
+
+WS -> RM : createPrivateRoom(hostId, settings)
+activate RM
+RM -> RM : Generate unique room code\n(e.g., "CHESS42A")
+RM -> DB : INSERT INTO private_rooms\n{roomCode: "CHESS42A",\n hostUserId: HOST,\n timeControl: "rapid"}
+activate DB
+DB --> RM : Room created successfully
+deactivate DB
+RM --> WS : {roomCode: "CHESS42A", roomId: "room_123"}
+deactivate RM
+
+WS -> FE_H : {type: "room_created",\n roomCode: "CHESS42A",\n shareUrl: "chess.com/join/CHESS42A"}
+FE_H -> HOST : Display room code\n& shareable link
+deactivate WS
+
+== Friend Joins Room ==
+HOST -> HOST : Share code "CHESS42A"\nwith friend via WhatsApp/Discord
+
+FRIEND -> FE_F : Open chess website
+activate FE_F
+FRIEND -> FE_F : Click "Join Private Game"
+FE_F -> FE_F : Show room code input
+FRIEND -> FE_F : Enter code "CHESS42A"
+FE_F -> WS : {type: "join_private_room",\n roomCode: "CHESS42A"}
+activate WS
+
+WS -> RM : joinPrivateRoom("CHESS42A", friendId)
+activate RM
+RM -> DB : SELECT * FROM private_rooms\nWHERE room_code = "CHESS42A"
+activate DB
+DB --> RM : Room details found
+deactivate DB
+
+RM -> RM : Validate room capacity\n& permissions
+RM -> RM : Add friend to room
+RM -> WS : createPvPGame(HOST, FRIEND, settings)
+
+WS -> WS : Use same game creation\nflow as matchmaking
+WS -> FE_H : {type: "friend_joined",\n opponent: "Friend",\n gameStarting: true}
+WS -> FE_F : {type: "room_joined",\n host: "Host",\n gameStarting: true}
+deactivate RM
+
+== Game Flow ==
+note over HOST, FRIEND
+  From here, the flow is identical
+  to the matchmaking game flow:
+
+  1. Both players redirected to game view
+  2. Real-time move synchronization
+  3. Time controls and game management
+  4. Rating updates (if rated game)
+  5. Game end and results
+end note
+
+deactivate WS
+deactivate FE_H
+deactivate FE_F
+
+@enduml
+
+' ============================================
+' SPECTATOR MODE FLOW
+' ============================================
+
+@startuml Spectator_Mode_Flow
+title Spectator Mode and Live Game Watching
+
+actor "Spectator" as SPEC
+actor "Player 1" as P1
+actor "Player 2" as P2
+participant "Game Browser\nFrontend" as FB
+participant "Game View\nFrontend" as FE_SPEC
+participant "WebSocket\nServer" as WS
+participant "Game Session\nManager" as GSM
+participant "Database\n(game_spectators)" as DB
+
+== Discover Live Games ==
+SPEC -> FB : Visit "Live Games" page
+activate FB
+FB -> WS : {type: "get_live_games"}
+activate WS
+WS -> GSM : getActiveGames()
+activate GSM
+GSM --> WS : [{gameId: "pvp_123", players: ["GrandMaster", "ProPlayer"], spectators: 15}]
+deactivate GSM
+WS -> FB : {type: "live_games_list", games: [...]}
+FB -> SPEC : Display active games list\nwith player ratings & spectator counts
+deactivate WS
+
+== Join as Spectator ==
+SPEC -> FB : Click on interesting game\n"GrandMaster vs ProPlayer"
+FB -> FE_SPEC : Redirect to game_view.html?gameId=pvp_123&mode=spectator
+activate FE_SPEC
+FE_SPEC -> WS : {type: "join_as_spectator",\n gameId: "pvp_123"}
+activate WS
+
+WS -> GSM : addSpectator("pvp_123", spectatorId)
+activate GSM
+GSM -> DB : INSERT INTO game_spectators\n{gameId: "pvp_123", userId: spectatorId}
+activate DB
+DB --> GSM : Spectator added
+deactivate DB
+
+GSM -> GSM : Increment spectator count
+GSM -> GSM : Get current game state
+GSM --> WS : {gameState: currentFEN, moveHistory: [...], timeRemaining: {...}}
+deactivate GSM
+
+WS -> FE_SPEC : {type: "spectator_joined",\n gameState: {...},\n players: {white: "GrandMaster", black: "ProPlayer"}}
+FE_SPEC -> SPEC : Display current board position\n& game information (read-only)
+deactivate WS
+
+== Live Move Updates ==
+note over P1, P2
+  As the actual game progresses,
+  spectators receive the same move
+  updates as players
+end note
+
+P1 -> P1 : Makes move in actual game
+WS -> GSM : Move processed (from actual game flow)
+activate WS
+activate GSM
+GSM -> GSM : Broadcast to all spectators
+GSM --> WS : {moveUpdate: "Nf3", newFEN: "..."}
+deactivate GSM
+
+WS -> FE_SPEC : {type: "spectator_move_update",\n move: "Nf3",\n fen: newFEN,\n timeUpdate: {...}}
+FE_SPEC -> SPEC : Update board position\n& move history in real-time
+deactivate WS
+
+== Game End for Spectators ==
+note over P1, P2
+  When the actual game ends
+end note
+
+WS -> FE_SPEC : {type: "game_ended",\n result: "white_wins",\n finalPosition: "..."}
+activate WS
+FE_SPEC -> SPEC : Show game result\n& final position
+
+WS -> GSM : removeSpectator("pvp_123", spectatorId)
+activate GSM
+GSM -> DB : DELETE FROM game_spectators\nWHERE gameId = "pvp_123" AND userId = spectatorId
+activate DB
+DB --> GSM : Spectator removed
+deactivate DB
+GSM -> GSM : Decrement spectator count
+deactivate GSM
+deactivate WS
+
+FE_SPEC -> SPEC : Show "Game ended" message\n& option to watch other games
+deactivate FB
+deactivate FE_SPEC
+
+@enduml
+
+@enduml

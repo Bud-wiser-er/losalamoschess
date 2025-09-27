@@ -1,58 +1,137 @@
 @startuml Byron_Sequence_Diagrams
 
 ' ============================================
-' PLAYER MOVE VALIDATION SEQUENCE
+' GAME INITIALIZATION AND PLAYER MOVE VALIDATION
 ' ============================================
 
-@startuml Player_Move_Validation
-title Player Move Validation Flow
+@startuml Game_Initialization_and_Move_Flow
+title Complete Game Flow - Initialization to Move Processing
 
 actor User as U
-participant "Frontend\n(Natasha)" as FE
-participant "WebSocket\n(Ethan)" as WS
+participant "Frontend\n(Dashboard)" as FE
+participant "WebSocket Server\n(clean-server.js)" as WS
 participant "RulesEngine\n(Byron)" as RE
-participant "Database\n(Arno)" as DB
+participant "AIBot\n(Byron)" as AI
+participant "Database" as DB
+participant "Game State\nManager" as GM
 
-U -> FE : Click piece & destination
+== Game Initialization ==
+U -> FE : Select bot level (L0-L4)\nand optional ELO
 activate FE
-FE -> FE : Construct UCI move\n(e.g., "e2e4")
-FE -> WS : {type: "MoveIntent",\n move: "e2e4",\n gameId: "123"}
+FE -> FE : Validate selection\n& construct game URL
+FE -> U : Redirect to game_view.html\n?botLevel=L3&elo=2000
+deactivate FE
+
+U -> FE : Load game page
+activate FE
+FE -> FE : Parse URL parameters\n(botLevel, elo)
+FE -> FE : Initialize board\n& WebSocket connection
+FE -> WS : {type: "join_game",\n botLevel: "L3",\n elo: 2000}
+activate WS
+
+WS -> GM : Create new game session
+activate GM
+GM -> GM : Generate unique gameId
+GM -> GM : Initialize game state\n{fen: startFEN, players: {}}
+GM -> WS : Store bot configuration\n{botLevel: "L3", elo: 2000}
+deactivate GM
+
+WS -> FE : {type: "game_joined",\n gameId: "abc123",\n yourColor: "white"}
+FE -> U : Display board & bot info\n"vs L3 - Enhanced (~2000 ELO)"
+deactivate WS
+
+== Human Move Processing ==
+U -> FE : Drag piece from e2 to e4
+activate FE
+FE -> FE : Validate drag legality\n& construct UCI move
+FE -> WS : {type: "player_move",\n move: "e2e4",\n gameId: "abc123"}
 activate WS
 
 WS -> DB : Fetch current game state
 activate DB
-DB --> WS : {fen, version, players}
+DB --> WS : {fen, moveHistory, gameStatus}
 deactivate DB
 
-WS -> RE : validateMove(fen, "e2e4")
+WS -> RE : validateMove(currentFen, "e2e4")
 activate RE
-RE -> RE : Parse FEN
-RE -> RE : Validate UCI format
-RE -> RE : Check piece ownership
-RE -> RE : Validate move legality
-RE -> RE : Check if king in check
-RE --> WS : {valid: true,\n flags: {check: false}}
+RE -> RE : Parse and validate FEN
+RE -> RE : Check UCI format validity
+RE -> RE : Verify piece ownership\n(white's turn)
+RE -> RE : Calculate legal moves\nfor piece at e2
+RE -> RE : Check move legality\n& board boundaries
+RE -> RE : Simulate move & verify\nking not in check
+RE --> WS : {valid: true,\n moveType: "normal",\n capture: false}
 deactivate RE
 
 alt Move is valid
-    WS -> RE : applyMove(fen, "e2e4")
+    WS -> RE : applyMove(currentFen, "e2e4")
     activate RE
-    RE -> RE : Apply move to board
-    RE -> RE : Generate new FEN
-    RE -> RE : Check game status
-    RE --> WS : {fen: "new-position",\n san: "e4",\n flags: {}}
+    RE -> RE : Execute move on board
+    RE -> RE : Update piece positions
+    RE -> RE : Generate new FEN string
+    RE -> RE : Check for check/checkmate
+    RE -> RE : Determine game status
+    RE --> WS : {newFen: "rnbqkbnr/pppppppp...",\n san: "e4",\n gameStatus: "ongoing",\n isCheck: false}
     deactivate RE
-    
-    WS -> DB : Save move\n{gameId, move, fen, version+1}
+
+    WS -> DB : Save move to history
+    activate DB
+    DB -> DB : Insert move record\n{gameId, move, fen, timestamp}
+    DB --> WS : Move saved successfully
+    deactivate DB
+
+    WS -> FE : {type: "move_applied",\n fen: newFen,\n san: "e4",\n turn: "black"}
+    FE -> FE : Update board display\n& switch turn indicator
+    FE -> U : Show updated position
+
+    == AI Move Processing ==
+    WS -> WS : Check if opponent is bot
+    WS -> WS : Retrieve bot configuration\n{botLevel: "L3", elo: 2000}
+    WS -> AI : {type: "ai_move_request",\n fen: newFen,\n level: "L3",\n elo: 2000,\n msCap: 5000}
+    activate AI
+
+    AI -> AI : Select strategy based on level
+    AI -> AI : Execute L3 Enhanced strategy\n(minimax + optimizations)
+    AI -> RE : getLegalMoves(newFen)
+    activate RE
+    RE --> AI : [legal moves array]
+    deactivate RE
+
+    loop Minimax search with depth 3
+        AI -> AI : Evaluate positions
+        AI -> AI : Apply alpha-beta pruning
+        AI -> AI : Check time constraints
+    end
+
+    AI -> AI : Select best move\nbased on evaluation
+    AI --> WS : {ok: true,\n move: "e7e5",\n eval: 0.15,\n depth: 3,\n time: 2341}
+    deactivate AI
+
+    WS -> RE : validateMove(newFen, "e7e5")
+    activate RE
+    RE --> WS : {valid: true}
+    deactivate RE
+
+    WS -> RE : applyMove(newFen, "e7e5")
+    activate RE
+    RE -> RE : Apply AI move
+    RE -> RE : Check for checkmate/stalemate
+    RE --> WS : {newFen: "...", san: "e5", gameStatus: "ongoing"}
+    deactivate RE
+
+    WS -> DB : Save AI move
     activate DB
     DB --> WS : Success
     deactivate DB
-    
-    WS -> FE : Broadcast\n{type: "Snapshot",\n fen, san, flags}
-    FE -> U : Update board display
+
+    WS -> FE : {type: "ai_move",\n fen: finalFen,\n san: "e5",\n turn: "white",\n metadata: {eval: 0.15, time: 2341}}
+    FE -> FE : Update board & display\nAI move with animation
+    FE -> U : Show AI's move\n& evaluation
+
 else Move is invalid
-    WS -> FE : {type: "Error",\n error: "ILLEGAL_MOVE"}
-    FE -> U : Show error message
+    WS -> FE : {type: "move_error",\n error: "ILLEGAL_MOVE",\n details: "Piece cannot move there"}
+    FE -> FE : Reset piece position
+    FE -> U : Show error notification\n& restore board state
 end
 
 deactivate WS
@@ -64,81 +143,157 @@ deactivate FE
 ' AI BOT MOVE GENERATION SEQUENCE
 ' ============================================
 
-@startuml AI_Bot_Move_Generation
-title AI Bot Move Generation Flow
+@startuml AI_Bot_Strategy_Details
+title Detailed AI Bot Strategy Implementation
 
-participant "WebSocket\n(Ethan)" as WS
-participant "AIBot\n(Byron)" as AI
-participant "Strategy\n(L0/L1/L2/L3)" as ST
-participant "RulesEngine\n(Byron)" as RE
-participant "Evaluator\n(Byron)" as EV
+participant "WebSocket Server" as WS
+participant "AIBot Manager" as AI
+participant "L0 Random\nStrategy" as L0
+participant "L1 Greedy\nStrategy" as L1
+participant "L2 Minimax\nStrategy" as L2
+participant "L3 Enhanced\nStrategy" as L3
+participant "L4 Fairy-Stockfish\nEngine" as L4
+participant "Position\nEvaluator" as EV
+participant "RulesEngine" as RE
 
-WS -> AI : generateMove(\n  {fen, level: "L2",\n   msCap: 1000})
+== Strategy Selection and Execution ==
+WS -> AI : generateMove({fen, level: "L3", elo: 2000, msCap: 5000})
 activate AI
 
-AI -> AI : Select strategy\nbased on level
-AI -> ST : findBestMove(fen, msCap)
-activate ST
+AI -> AI : Parse bot level\n& validate parameters
+AI -> AI : Select strategy instance\nbased on level
 
-alt Level L0 (Random)
-    ST -> RE : getLegalMoves(fen)
+alt Level L0 - Random Strategy
+    AI -> L0 : findBestMove(fen, msCap)
+    activate L0
+    L0 -> RE : getLegalMoves(fen)
     activate RE
-    RE --> ST : [legal moves]
+    RE --> L0 : [e2e4, d2d4, g1f3, ...]
     deactivate RE
-    ST -> ST : Pick random move
-    
-else Level L1 (Greedy)
-    ST -> RE : getLegalMoves(fen)
+    L0 -> L0 : Math.random() selection
+    L0 --> AI : {move: "e2e4", eval: 0.0, depth: 0}
+    deactivate L0
+
+else Level L1 - Greedy Strategy
+    AI -> L1 : findBestMove(fen, msCap)
+    activate L1
+    L1 -> RE : getLegalMoves(fen)
     activate RE
-    RE --> ST : [legal moves]
+    RE --> L1 : [all legal moves]
     deactivate RE
-    
+
     loop For each move
-        ST -> EV : evaluatePosition(newFen)
+        L1 -> RE : applyMove(fen, move)
+        activate RE
+        RE --> L1 : resultingFen
+        deactivate RE
+        L1 -> EV : evaluatePosition(resultingFen)
         activate EV
-        EV --> ST : score
+        EV -> EV : Count material\n& basic position factors
+        EV --> L1 : materialScore
         deactivate EV
     end
-    ST -> ST : Select best capture
-    
-else Level L2/L3 (Minimax)
-    ST -> RE : getLegalMoves(fen)
+    L1 -> L1 : Select move with\nhighest immediate gain
+    L1 --> AI : {move: "exd5", eval: 1.2, depth: 1}
+    deactivate L1
+
+else Level L2 - Minimax Strategy
+    AI -> L2 : findBestMove(fen, msCap)
+    activate L2
+    L2 -> L2 : Initialize search\n(depth: 2, alpha-beta)
+    L2 -> RE : getLegalMoves(fen)
     activate RE
-    RE --> ST : [legal moves]
+    RE --> L2 : [root moves]
     deactivate RE
-    
-    ST -> ST : Start minimax search
-    loop Minimax recursion (depth 2-3)
-        ST -> RE : getLegalMoves(position)
-        activate RE
-        RE --> ST : [moves]
-        deactivate RE
-        
-        ST -> EV : evaluatePosition(position)
-        activate EV
-        EV --> ST : score
-        deactivate EV
-        
-        ST -> ST : Alpha-beta pruning
-        
-        alt Time limit reached
-            ST -> ST : Return best move so far
+
+    loop For each root move
+        L2 -> L2 : minimax(position, depth=2,\n alpha, beta, maximizing)
+        loop Recursive minimax
+            L2 -> RE : getLegalMoves(position)
+            activate RE
+            RE --> L2 : [moves at depth]
+            deactivate RE
+            L2 -> EV : evaluatePosition(leafNode)
+            activate EV
+            EV --> L2 : positionScore
+            deactivate EV
+            L2 -> L2 : Alpha-beta pruning
         end
     end
+    L2 -> L2 : Select move with\nbest minimax value
+    L2 --> AI : {move: "Nf3", eval: 0.3, depth: 2}
+    deactivate L2
+
+else Level L3 - Enhanced Strategy
+    AI -> L3 : findBestMove(fen, msCap)
+    activate L3
+    L3 -> L3 : Initialize enhanced search\n(depth: 3, TT, move ordering)
+    L3 -> L3 : Check transposition table
+    L3 -> L3 : Generate & order moves\n(captures first, killer moves)
+
+    loop Iterative deepening (1 to 3)
+        L3 -> RE : getLegalMoves(position)
+        activate RE
+        RE --> L3 : [ordered moves]
+        deactivate RE
+
+        loop For each move (ordered)
+            L3 -> L3 : Search with\nenhanced pruning
+            L3 -> EV : evaluatePosition(position)
+            activate EV
+            EV -> EV : Material + positional\n+ king safety + mobility
+            EV --> L3 : enhancedScore
+            deactivate EV
+            L3 -> L3 : Store in TT
+
+            alt Time limit check
+                L3 -> L3 : Return best move so far
+            end
+        end
+    end
+    L3 --> AI : {move: "Be2", eval: 0.45, depth: 3, nodes: 15420}
+    deactivate L3
+
+else Level L4 - Fairy-Stockfish Engine
+    AI -> L4 : findBestMove(fen, elo, msCap)
+    activate L4
+    L4 -> L4 : Configure engine strength\nbased on ELO (1000-3000)
+    L4 -> L4 : Set search parameters\n(depth, time, nodes)
+    L4 -> L4 : Start engine analysis
+
+    loop Engine search
+        L4 -> L4 : Advanced search algorithms\n(NNUE eval, deep pruning)
+        L4 -> L4 : Multi-threaded analysis
+        L4 -> L4 : Opening book lookup
+        L4 -> L4 : Endgame tablebase
+    end
+
+    L4 -> L4 : Apply ELO limitation\n(reduce strength if needed)
+    L4 --> AI : {move: "d4", eval: 1.15, depth: 12, engine: "fairy-stockfish"}
+    deactivate L4
 end
 
-ST --> AI : {move: "e7e5",\n eval: 0.3}
-deactivate ST
-
-AI -> RE : validateMove(fen, "e7e5")
+== Move Validation and Response ==
+AI -> RE : validateMove(fen, selectedMove)
 activate RE
-RE --> AI : {valid: true}
+RE -> RE : Verify move legality\n& format correctness
+RE --> AI : {valid: true, moveType: "normal"}
 deactivate RE
 
-AI --> WS : {ok: true,\n move: "e7e5",\n eval: 0.3,\n time: 850}
+AI -> AI : Compile response with\nmetadata & timing info
+
+AI --> WS : {ok: true, move: selectedMove, eval: evaluationScore, depth: searchDepth, time: elapsedMs, strategy: "L3"}
 deactivate AI
 
-WS -> WS : Apply move\n(same as player flow)
+note right of WS
+  Each strategy has different
+  characteristics:
+  - L0: Pure randomness
+  - L1: Tactical awareness
+  - L2: Strategic planning
+  - L3: Advanced techniques
+  - L4: World-class engine
+end note
 
 @enduml
 
@@ -201,53 +356,314 @@ end note
 ' ERROR HANDLING SEQUENCE
 ' ============================================
 
-@startuml Error_Handling
-title Byron Error Handling Flow
+@startuml Comprehensive_Error_Handling
+title Comprehensive Error Handling and Edge Cases
 
-participant "WebSocket" as WS
+participant "Frontend" as FE
+participant "WebSocket Server" as WS
 participant "RulesEngine" as RE
 participant "AIBot" as AI
+participant "Database" as DB
+participant "Game State" as GS
 
-== Invalid Move Validation ==
-WS -> RE : validateMove(fen, "invalid")
+== Input Validation Errors ==
+FE -> WS : {type: "player_move", move: "invalid-format", gameId: "123"}
+activate WS
+WS -> WS : Validate message format
+WS --> FE : {type: "error", code: "INVALID_MESSAGE_FORMAT", details: "Move format must be UCI"}
+deactivate WS
+
+== Game State Errors ==
+FE -> WS : {type: "player_move", move: "e2e4", gameId: "nonexistent"}
+activate WS
+WS -> DB : fetchGameState("nonexistent")
+activate DB
+DB --> WS : null (game not found)
+deactivate DB
+WS --> FE : {type: "error", code: "GAME_NOT_FOUND", details: "Game session expired or invalid"}
+deactivate WS
+
+== Move Validation Errors ==
+FE -> WS : {type: "player_move", move: "e2e4", gameId: "123"}
+activate WS
+WS -> GS : getCurrentFEN("123")
+activate GS
+GS --> WS : "invalid-fen-string"
+deactivate GS
+
+WS -> RE : validateMove("invalid-fen-string", "e2e4")
 activate RE
-RE -> RE : Parse UCI
-RE --> WS : {valid: false,\n error: "INVALID_UCI"}
+RE -> RE : Parse FEN string
+RE --> WS : {valid: false, error: "INVALID_FEN", details: "Malformed FEN string"}
 deactivate RE
+WS --> FE : {type: "move_error", error: "INVALID_BOARD_STATE", recovery: "refresh_required"}
+deactivate WS
 
-== Invalid FEN ==
-WS -> RE : validateMove("invalid-fen", "e2e4")
+== Chess Rule Violations ==
+FE -> WS : {type: "player_move", move: "e1g1", gameId: "123"}
+activate WS
+WS -> RE : validateMove(validFen, "e1g1")
 activate RE
-RE -> RE : Parse FEN
-RE --> WS : {valid: false,\n error: "INVALID_FEN"}
+RE -> RE : Check castling legality
+RE -> RE : Verify king hasn't moved
+RE -> RE : Check for pieces between
+RE -> RE : Verify no check conditions
+RE --> WS : {valid: false, error: "ILLEGAL_CASTLING", details: "King has moved previously"}
 deactivate RE
+WS --> FE : {type: "move_error", error: "ILLEGAL_CASTLING", suggestion: "King cannot castle after moving"}
+deactivate WS
 
-== Illegal Move (Variant Rules) ==
-WS -> RE : validateMove(fen, "e1g1")
-activate RE
-RE -> RE : Check castling
-RE --> WS : {valid: false,\n error: "NO_CASTLING"}
-deactivate RE
+== Turn Order Violations ==
+FE -> WS : {type: "player_move", move: "e7e5", gameId: "123"}
+activate WS
+WS -> GS : getCurrentTurn("123")
+activate GS
+GS --> WS : "white"
+deactivate GS
+WS -> WS : Check if player is white
+WS --> FE : {type: "move_error", error: "NOT_YOUR_TURN", details: "Wait for opponent's move"}
+deactivate WS
 
-== AI Bot Invalid Level ==
-WS -> AI : generateMove(\n  {fen, level: "L99"})
+== AI Bot Errors ==
+WS -> AI : generateMove({fen: validFen, level: "L99", msCap: 5000})
 activate AI
-AI -> AI : Validate level
-AI --> WS : {ok: false,\n error: "INVALID_LEVEL"}
+AI -> AI : Validate bot level
+AI --> WS : {ok: false, error: "INVALID_BOT_LEVEL", validLevels: ["L0", "L1", "L2", "L3", "L4"]}
 deactivate AI
 
-== AI Bot Timeout ==
-WS -> AI : generateMove(\n  {fen, level: "L3",\n   msCap: 100})
+== AI Timeout Handling ==
+WS -> AI : generateMove({fen: complexPosition, level: "L3", msCap: 1000})
 activate AI
-AI -> AI : Start search
-AI -> AI : Time limit reached
-AI --> WS : {ok: true,\n move: "best-so-far",\n time: 100}
-deactivate AI\
+AI -> AI : Start minimax search
+AI -> AI : Monitor time elapsed
 
-note right of WS
-  All errors follow consistent
-  format with descriptive
-  error codes
+alt Search completes in time
+    AI --> WS : {ok: true, move: "Nf3", eval: 0.3, time: 850}
+else Timeout reached
+    AI -> AI : Return best move found so far
+    AI --> WS : {ok: true, move: "e7e5", eval: 0.1, time: 1000, timeout: true}
+end
+deactivate AI
+
+== Database Connection Errors ==
+WS -> DB : saveMove({gameId: "123", move: "e2e4", fen: newFen})
+activate DB
+DB -> DB : Attempt database connection
+DB --> WS : {error: "CONNECTION_FAILED", retry: true}
+deactivate DB
+
+WS -> WS : Implement retry logic
+WS -> DB : saveMove (retry attempt)
+activate DB
+DB --> WS : {success: true, moveId: 456}
+deactivate DB
+
+== Game End State Detection ==
+WS -> RE : applyMove(fen, "Qh8#")
+activate RE
+RE -> RE : Apply move to board
+RE -> RE : Check for checkmate
+RE -> RE : Verify no legal moves remain
+RE --> WS : {newFen: finalFen, gameStatus: "checkmate", winner: "white"}
+deactivate RE
+
+WS -> GS : updateGameStatus("123", "completed", "white")
+activate GS
+GS --> WS : {success: true}
+deactivate GS
+
+WS --> FE : {type: "game_ended", reason: "checkmate", winner: "white", finalFen: finalFen}
+
+== Stalemate Detection (Needs Improvement) ==
+WS -> RE : applyMove(fen, moveResult)
+activate RE
+RE -> RE : Check if king is in check
+RE -> RE : Generate all legal moves
+RE -> RE : Count available moves
+
+alt No legal moves and king not in check
+    RE --> WS : {gameStatus: "stalemate", draw: true}
+else Insufficient material detected
+    RE -> RE : Count remaining pieces
+    RE --> WS : {gameStatus: "insufficient_material", draw: true}
+else 50-move rule or repetition
+    RE --> WS : {gameStatus: "draw_by_rule", draw: true}
+end
+deactivate RE
+
+note over RE
+  TODO: Improve stalemate detection
+  for positions where pieces remain
+  but checkmate is impossible
+  (e.g., only kings + bishops on
+  opposite colors)
+end note
+
+== Connection Loss Recovery ==
+FE -> WS : WebSocket connection lost
+WS -> WS : Clean up game session
+WS -> GS : markPlayerDisconnected("123", "white")
+
+FE -> WS : Reconnect attempt
+WS -> WS : Validate session token
+WS -> GS : restoreGameState("123")
+activate GS
+GS --> WS : {fen, moveHistory, gameStatus}
+deactivate GS
+WS --> FE : {type: "game_restored", fen: currentFen, yourTurn: false}
+
+@enduml
+
+' ============================================
+' USER ANALYTICS AND STATISTICS FLOW
+' ============================================
+
+@startuml User_Analytics_Flow
+title Real-Time User Analytics and Statistics System
+
+actor User as U
+participant "Dashboard\nFrontend" as FE
+participant "Analytics\nAPI" as API
+participant "Statistics\nProcessor" as SP
+participant "Database\n(user_games)" as DB
+participant "Cache\nLayer" as CACHE
+participant "WebSocket\nGame Server" as WS
+
+== Dashboard Statistics Loading ==
+U -> FE : Visit dashboard page
+activate FE
+FE -> FE : Check if user authenticated
+FE -> API : GET /api/user-stats/:userId
+activate API
+
+API -> CACHE : Check cached stats
+activate CACHE
+CACHE --> API : null (cache miss)
+deactivate CACHE
+
+API -> SP : calculateUserStats(userId)
+activate SP
+SP -> DB : Query user game history
+activate DB
+DB --> SP : [game records for user]
+deactivate DB
+
+SP -> SP : Calculate aggregated stats:\n- Total games\n- Win/Loss/Draw counts\n- Win rate percentage\n- Current rating\n- Rating changes\n- Current/best streaks\n- Recent performance
+
+SP --> API : {totalGames: 342, winRate: 58.2%, currentRating: 1245, ...}
+deactivate SP
+
+API -> CACHE : Store stats (TTL: 5 minutes)
+activate CACHE
+CACHE --> API : Cached successfully
+deactivate CACHE
+
+API --> FE : {stats: {totalGames: 342, winRate: 58.2%, ...}}
+deactivate API
+
+FE -> FE : Update dashboard with\nreal user statistics
+FE -> U : Display personalized stats
+deactivate FE
+
+== Real-Time Game Result Recording ==
+WS -> WS : Game completed\n(checkmate/stalemate/resignation)
+activate WS
+WS -> WS : Determine game result\n& participants
+
+WS -> DB : INSERT INTO user_games\n{userId, result, opponent_type,\n bot_level, moves_count, duration, ...}
+activate DB
+DB --> WS : Game record saved (ID: 789)
+deactivate DB
+
+WS -> SP : updateUserStatistics(userId, gameResult)
+activate SP
+SP -> DB : Fetch recent user performance
+activate DB
+DB --> SP : [last 10 games, rating history]
+deactivate DB
+
+SP -> SP : Recalculate statistics:\n- Update win/loss counts\n- Recalculate win rate\n- Update current streak\n- Calculate rating change\n- Update weekly/monthly stats
+
+SP -> DB : UPDATE user_statistics\nSET wins = wins + 1,\ncurrent_rating = newRating, ...
+activate DB
+DB --> SP : Statistics updated
+deactivate DB
+
+SP -> CACHE : Invalidate cached stats\nfor user
+activate CACHE
+CACHE --> SP : Cache cleared
+deactivate CACHE
+deactivate SP
+
+WS -> FE : {type: "game_ended", \nresult: "win", \nratingChange: +23,\nnewRating: 1268}
+FE -> FE : Update UI with new stats
+FE -> U : Show game result &\nrating change
+deactivate WS
+
+== Analytics API Endpoints ==
+note over API
+  Available Analytics Endpoints:
+
+  GET /api/user-stats/:userId
+  - Returns complete user statistics
+
+  GET /api/user-games/:userId?limit=10
+  - Returns recent game history
+
+  GET /api/leaderboard?type=rating
+  - Returns top players by rating
+
+  GET /api/user-performance/:userId?period=week
+  - Returns performance trends
+
+  POST /api/game-result
+  - Records completed game result
+end note
+
+== Performance Optimization ==
+FE -> API : GET /api/user-stats/:userId (cached)
+activate API
+API -> CACHE : Check for cached stats
+activate CACHE
+CACHE --> API : {cached stats data}
+deactivate CACHE
+API --> FE : Instant response (< 50ms)
+deactivate API
+
+== Weekly Statistics Update ==
+SP -> SP : Scheduled job (weekly)
+activate SP
+SP -> DB : Calculate weekly stats\nfor all active users
+activate DB
+
+loop For each user
+    DB -> DB : Count games this week
+    DB -> DB : Calculate rating changes
+    DB -> DB : Update weekly performance
+end
+
+DB --> SP : Weekly stats updated
+deactivate DB
+
+SP -> CACHE : Clear all user caches
+activate CACHE
+CACHE --> SP : All caches cleared
+deactivate CACHE
+deactivate SP
+
+== Database Schema Optimization ==
+note over DB
+  Optimized queries using indexes:
+
+  INDEX idx_user_recent_games
+  ON user_games(user_id, created_at DESC)
+
+  INDEX idx_user_wins_losses
+  ON user_games(user_id, result, created_at)
+
+  INDEX idx_weekly_stats
+  ON user_games(user_id, created_at)
+  WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
 end note
 
 @enduml
