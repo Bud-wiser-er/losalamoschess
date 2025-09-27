@@ -148,37 +148,57 @@ class RulesEngine {
      * @param {string} uci - Move to apply (already validated)
      * @returns {Object} New game state with FEN and status
      */
+/**
+ * Applies a validated move and returns new game state
+ * @param {string} fen - Current position
+ * @param {string} uci - Move to apply (already validated)
+ * @returns {Object} New game state with FEN and status
+ */
     applyMove(fen, uci) {
         const board = this.parseFEN(fen);
+        if (!board) {
+            return { valid: false, error: 'INVALID_FEN' };
+        }
+        
         const move = this.parseUCI(uci);
+        if (!move) {
+            return { valid: false, error: 'INVALID_UCI' };
+        }
 
         // Apply the move
         const capturedPiece = board.getPieceAt(move.to);
         board.makeMove(move);
 
-        // ONLY CHANGE: Update turn correctly
+        // Update turn
         board.turn = board.turn === 'white' ? 'black' : 'white';
-        board.fullMoveNumber += board.turn === 'white' ? 1 : 0;
-
-        // Update fifty-move rule counter
-        if (capturedPiece || board.getPieceAt(move.to).type === 'pawn') {
+        
+        // Update move counters
+        if (board.turn === 'white') {
+            board.fullMoveNumber++;
+        }
+        
+        // Update half-move clock (for fifty-move rule)
+        if (capturedPiece || board.getPieceAt(move.to)?.type === 'pawn') {
             board.halfMoveClock = 0;
         } else {
             board.halfMoveClock++;
         }
 
+        // Generate new FEN
+        const newFEN = this.generateFEN(board);
+        
         // Check game status
         const status = this.checkGameStatus(board);
 
         return {
-            fen: this.generateFEN(board),
+            valid: true,
+            fen: newFEN,
             status: status.type,
             flags: {
                 check: status.isCheck,
                 checkmate: status.type === 'CHECKMATE',
                 stalemate: status.type === 'STALEMATE',
-                threefoldRepetition: status.type === 'DRAW' && status.reason === 'THREEFOLD',
-                fiftyMoveRule: status.type === 'DRAW' && status.reason === 'FIFTY_MOVE'
+                capture: capturedPiece !== null
             },
             capturedPiece: capturedPiece ? capturedPiece.notation : null
         };
