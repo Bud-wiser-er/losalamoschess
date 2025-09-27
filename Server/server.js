@@ -377,13 +377,81 @@ io.on('connection', (socket) => {
     console.log(`Move made in game ${gameId} by user ${socket.user.userId}:`, move);
   });
   
+  // BAN: Added AI move request handling for different bot levels
+  // Handle AI move requests
+  socket.on('ai_move_request', async (data) => {
+    const { gameId, botLevel, currentFen, elo } = data;
+
+    console.log(`🤖 AI move requested - Level: ${botLevel}, ELO: ${elo}, FEN: ${currentFen}`);
+
+    try {
+      // Load and initialize AI bot
+      const AIBot = require('../backend/src/ai-bot/index');
+      const aiBot = new AIBot();
+
+      // Prepare AI request
+      const aiRequest = {
+        fen: currentFen,
+        level: botLevel,
+        msCap: 5000, // 5 second timeout
+      };
+
+      // Add ELO for L4 bot level
+      if (botLevel === 'L4' && elo) {
+        aiRequest.elo = parseInt(elo);
+      }
+
+      console.log(`📤 Sending request to AI bot:`, aiRequest);
+
+      // Generate AI move
+      const aiResponse = await aiBot.generateMove(aiRequest);
+
+      if (aiResponse.ok && aiResponse.move) {
+        console.log(`✅ AI move generated:`, aiResponse.move);
+
+        // Send AI move back to the game
+        socket.emit('ai_move', {
+          gameId,
+          move: aiResponse.move,
+          evaluation: aiResponse.evaluation,
+          depth: aiResponse.depth,
+          nodes: aiResponse.nodes,
+          timeMs: aiResponse.timeMs,
+          elo: aiResponse.elo,
+          timestamp: new Date().toISOString()
+        });
+
+        // Also broadcast to other players in the game
+        socket.to(`game:${gameId}`).emit('ai_move', {
+          gameId,
+          move: aiResponse.move,
+          timestamp: new Date().toISOString()
+        });
+
+      } else {
+        console.error('❌ AI move generation failed:', aiResponse);
+        socket.emit('error', {
+          message: `AI move generation failed: ${aiResponse.error || 'Unknown error'}`,
+          details: aiResponse.details
+        });
+      }
+
+    } catch (error) {
+      console.error('❌ AI move request error:', error);
+      socket.emit('error', {
+        message: 'AI move generation failed',
+        details: error.message
+      });
+    }
+  });
+
   // Handle chat messages (IMPROVED XSS prevention)
   socket.on('chat-message', (data) => {
     const { gameId, message } = data;
-    
+
     // Enhanced sanitization
     const sanitizedMessage = sanitizeInput(message);
-    
+
     // Broadcast to game room
     io.to(`game:${gameId}`).emit('chat-message', {
       gameId,

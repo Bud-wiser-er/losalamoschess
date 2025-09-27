@@ -35,6 +35,7 @@ modalConfirm.addEventListener("click", () => closeModal(true));
 modalCancel.addEventListener("click", () => closeModal(false));
 
 
+// BAN: Updated game state to include bot configuration
 // Game state management
 let gameState = {
     board: null,
@@ -45,7 +46,10 @@ let gameState = {
     moveHistory: [],
     isGameActive: true,
     selectedSquare: null,
-    legalMoves: []
+    legalMoves: [],
+    botLevel: 'L2', // Default bot level
+    botElo: null,   // Custom ELO for L4
+    gameOver: false // BAN: Track if game has ended
 };
 
 // Timer management
@@ -69,24 +73,28 @@ const INITIAL_POSITION = {
 };
 
 /**
+ * BAN: Updated initialization to handle bot level parameters
  * Initialize the chess game
  * Called when page loads
  */
 function initializeGame() {
     console.log('🎮 Initializing Los Alamos Chess Game...');
-    
+
     // Setup board
     createChessBoard();
     setupInitialPosition();
-    
+
     // Setup UI components
     setupEventListeners();
     initializeTimers();
     loadPlayerInfo();
-    
+
+    // BAN: Load bot configuration from URL parameters
+    loadBotConfiguration();
+
     // Initialize WebSocket connection
     initializeWebSocket();
-    
+
     console.log('✅ Game initialization complete');
 }
 
@@ -585,10 +593,14 @@ function addMoveToHistory(from, to, piece, isCapture) {
  */
 function switchTurn() {
     gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
-    
+    updateTurnDisplay();
+}
+
+// BAN: New function to update turn display without changing the current player
+function updateTurnDisplay() {
     const playerCard = document.getElementById('player-card');
     const opponentCard = document.getElementById('opponent-card');
-    
+
     if ((gameState.currentPlayer === 'white' && gameState.playerColor === 'white') ||
         (gameState.currentPlayer === 'black' && gameState.playerColor === 'black')) {
         playerCard.classList.add('active');
@@ -597,12 +609,12 @@ function switchTurn() {
         opponentCard.classList.add('active');
         playerCard.classList.remove('active');
     }
-    
+
     const currentTurnElement = document.getElementById('current-turn');
     if (currentTurnElement) {
         currentTurnElement.textContent = gameState.currentPlayer.charAt(0).toUpperCase() + gameState.currentPlayer.slice(1);
     }
-    
+
     switchTimers();
 }
 
@@ -712,16 +724,68 @@ function updateMoveCount() {
 function loadPlayerInfo() {
     const username = localStorage.getItem('username') || 'Player';
     const rating = localStorage.getItem('rating') || '1200';
-    
+
     const playerNameElement = document.querySelector('#player-card .player-name');
     const playerRatingElement = document.querySelector('#player-card .player-rating');
     const playerAvatarElement = document.querySelector('#player-card .player-avatar');
-    
+
     if (playerNameElement) playerNameElement.textContent = username;
     if (playerRatingElement) playerRatingElement.textContent = `${rating} ELO`;
     if (playerAvatarElement) playerAvatarElement.textContent = username.charAt(0).toUpperCase();
-    
+
     console.log(`Player loaded: ${username} (${rating} ELO)`);
+}
+
+/**
+ * BAN: Load bot configuration from URL parameters and update opponent display
+ * Reads botLevel and elo parameters to configure the AI opponent
+ */
+function loadBotConfiguration() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const botLevel = urlParams.get('botLevel') || 'L2'; // Default to L2 if not specified
+    const customElo = urlParams.get('elo');
+
+    console.log(`🤖 Loading bot configuration: Level=${botLevel}, CustomELO=${customElo}`);
+
+    // Store bot configuration in game state for later use
+    gameState.botLevel = botLevel;
+    gameState.botElo = customElo ? parseInt(customElo) : null;
+
+    // Bot level information mapping
+    const botLevelInfo = {
+        'L0': { name: 'L0 - Random', rating: '~800 ELO', description: 'Random moves' },
+        'L1': { name: 'L1 - Greedy', rating: '~1200 ELO', description: 'Basic tactics' },
+        'L2': { name: 'L2 - Minimax', rating: '~1600 ELO', description: 'Strategic play' },
+        'L3': { name: 'L3 - Enhanced', rating: '~2000 ELO', description: 'Advanced strategy' },
+        'L4': { name: 'L4 - Fairy-Stockfish', rating: 'Engine strength', description: 'World-class engine' }
+    };
+
+    const botInfo = botLevelInfo[botLevel] || botLevelInfo['L2'];
+
+    // Update opponent display
+    const opponentNameElement = document.querySelector('#opponent-card .player-name');
+    const opponentRatingElement = document.querySelector('#opponent-card .player-rating');
+
+    if (opponentNameElement) {
+        opponentNameElement.textContent = botInfo.name;
+    }
+
+    if (opponentRatingElement) {
+        // For L4, show custom ELO if provided, otherwise show default rating
+        if (botLevel === 'L4' && customElo) {
+            opponentRatingElement.textContent = `${customElo} ELO`;
+        } else {
+            opponentRatingElement.textContent = botInfo.rating;
+        }
+    }
+
+    // Update game status to show bot level
+    const gameStatusElement = document.querySelector('.game-status');
+    if (gameStatusElement) {
+        gameStatusElement.textContent = `● Playing vs ${botInfo.name}`;
+    }
+
+    console.log(`✅ Bot configured: ${botInfo.name} - ${opponentRatingElement?.textContent || 'Unknown rating'}`);
 }
 
 /**
@@ -799,10 +863,22 @@ function initializeWebSocket() {
         
         gameSocket.onopen = () => {
             console.log('WebSocket connected');
-            gameSocket.send(JSON.stringify({
+            // BAN: Send bot configuration when joining game
+            const joinMessage = {
                 type: 'join_game',
                 gameId: gameState.gameId || 'demo_game'
-            }));
+            };
+
+            // Include bot configuration if available
+            if (gameState.botLevel) {
+                joinMessage.botLevel = gameState.botLevel;
+                if (gameState.botElo) {
+                    joinMessage.elo = gameState.botElo;
+                }
+                console.log(`🤖 Joining game with bot level: ${gameState.botLevel}${gameState.botElo ? ` (ELO: ${gameState.botElo})` : ''}`);
+            }
+
+            gameSocket.send(JSON.stringify(joinMessage));
         };
         
         gameSocket.onmessage = (event) => {
@@ -850,7 +926,7 @@ function handleWebSocketMessage(data) {
             
         case 'ai_move':
             console.log('🤖 AI move received:', data.move);
-            handleAIMove(data.move);
+            handleAIMove(data);
             break;
             
         case 'chat':
@@ -862,6 +938,7 @@ function handleWebSocketMessage(data) {
             break;
 
         case 'game-ended':
+            console.log('🏁 Received game-ended message:', data);
             handleGameEnded(data);
             break;
 
@@ -879,48 +956,65 @@ function handleWebSocketMessage(data) {
  * Handle AI move from server
  * @param {Object} move - AI move data
  */
-function handleAIMove(move) {
+// BAN: Updated to handle full AI move data and check for game end
+function handleAIMove(data) {
+    const move = data.move;
     if (!move || !move.from || !move.to) return;
-    
+
     console.log(`🤖 Executing AI move: ${move.from} → ${move.to}`);
-    
+
     const fromSquare = document.getElementById(move.from);
     const toSquare = document.getElementById(move.to);
-    
+
     if (!fromSquare || !toSquare) {
         console.error('Invalid squares for AI move');
         return;
     }
-    
+
     const piece = fromSquare.querySelector('.piece');
-    
+
     if (piece) {
         // Remove piece from source
         fromSquare.removeChild(piece);
-        
+
         // Remove captured piece if any
         const capturedPiece = toSquare.querySelector('.piece');
         if (capturedPiece) {
             toSquare.removeChild(capturedPiece);
         }
-        
+
         // Place piece on destination
         toSquare.appendChild(piece);
-        
+
         // Update game state
         gameState.board[move.to] = gameState.board[move.from];
         gameState.board[move.from] = '';
-        
+
+        // BAN: Update current player based on AI move response
+        if (move.activeColor) {
+            gameState.currentPlayer = move.activeColor;
+            console.log(`🎮 Turn updated to: ${move.activeColor}`);
+        } else {
+            // If no activeColor provided, switch turn normally
+            gameState.currentPlayer = gameState.currentPlayer === 'white' ? 'black' : 'white';
+            console.log(`🎮 Turn switched to: ${gameState.currentPlayer}`);
+        }
+
         // Update visual highlights
         updateLastMoveHighlight(move.from, move.to);
-        
+
         // Add to move history
         addMoveToHistory(move.from, move.to, gameState.board[move.to], !!capturedPiece);
-        
-        // Switch turn back to player
-        switchTurn();
 
-        console.log('✅ AI move executed successfully - turn switched to player');
+        // BAN: Don't call switchTurn() since we already set the correct currentPlayer above
+        // Update UI elements to reflect the current turn
+        updateTurnDisplay();
+
+        if (!gameState.gameOver) {
+            console.log('✅ AI move executed successfully - player can move');
+        } else {
+            console.log('✅ AI move executed - game has ended, no turn switch');
+        }
     }
 }
 
@@ -1094,18 +1188,45 @@ function sendMoveToServer(from, to) {
 
 
 /**
- * Trigger AI move (simplified)
+ * BAN: Updated AI move triggering to use selected bot level
+ * Trigger AI move using the configured bot level
  */
 function triggerAIMove() {
     if (gameState.currentPlayer === gameState.playerColor) return;
-    
-    const aiMoves = getAllLegalMovesForColor(gameState.currentPlayer);
-    
-    if (aiMoves.length > 0) {
-        const randomMove = aiMoves[Math.floor(Math.random() * aiMoves.length)];
-        setTimeout(() => {
-            makeMove(randomMove.from, randomMove.to);
-        }, 500);
+
+    console.log(`🤖 Triggering AI move for bot level: ${gameState.botLevel}`);
+
+    // Send AI move request to backend with bot level configuration
+    if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
+        const aiRequest = {
+            type: 'ai_move_request',
+            gameId: gameState.gameId,
+            botLevel: gameState.botLevel || 'L2',
+            currentFen: generateCurrentFEN(),
+            timestamp: Date.now()
+        };
+
+        // Include ELO for L4 bot level
+        if (gameState.botLevel === 'L4' && gameState.botElo) {
+            aiRequest.elo = gameState.botElo;
+            console.log(`🎯 L4 bot with custom ELO: ${gameState.botElo}`);
+        } else if (gameState.botLevel === 'L4') {
+            console.log(`⚠️ L4 bot selected but no ELO found. gameState.botElo = ${gameState.botElo}`);
+        }
+
+        console.log('📤 Sending AI move request:', aiRequest);
+        gameSocket.send(JSON.stringify(aiRequest));
+    } else {
+        // Fallback to simplified AI if WebSocket is not available
+        console.warn('WebSocket not available - using fallback AI');
+        const aiMoves = getAllLegalMovesForColor(gameState.currentPlayer);
+
+        if (aiMoves.length > 0) {
+            const randomMove = aiMoves[Math.floor(Math.random() * aiMoves.length)];
+            setTimeout(() => {
+                makeMove(randomMove.from, randomMove.to);
+            }, 500);
+        }
     }
 }
 
