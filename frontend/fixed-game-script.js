@@ -144,6 +144,12 @@ function setupInitialPosition() {
 function handleSquareClick(event) {
     if (!gameState.isGameActive) return;
 
+    // Check if game is over
+    if (gameState.gameOver) {
+        console.log('Game is over! No more moves allowed.');
+        return;
+    }
+
     // Check if it's the player's turn FIRST - before any other logic
     if (gameState.currentPlayer !== gameState.playerColor) {
         console.log('Not your turn! Current player:', gameState.currentPlayer, 'Your color:', gameState.playerColor);
@@ -169,7 +175,14 @@ function handleSquareClick(event) {
         // If clicking a valid move destination
         if (gameState.legalMoves.includes(squareId)) {
             console.log(`Executing move: ${gameState.selectedSquare} → ${squareId}`);
-            makeMove(gameState.selectedSquare, squareId);
+
+            // Execute move locally first for immediate feedback
+            const move = { from: gameState.selectedSquare, to: squareId };
+            executeConfirmedMove(move);
+
+            // Then send to server for validation
+            sendMoveToServer(gameState.selectedSquare, squareId);
+            clearSelection();
             return;
         }
         
@@ -368,9 +381,7 @@ function isSameColor(piece1, piece2) {
  */
 function highlightLegalMoves() {
     // Clear existing highlights
-    document.querySelectorAll('.valid-move, .capture-move').forEach(sq => {
-        sq.classList.remove('valid-move', 'capture-move');
-    });
+    clearHighlights();
     
     console.log('Highlighting moves:', gameState.legalMoves);
     
@@ -392,15 +403,29 @@ function highlightLegalMoves() {
         }
     });
 }
+
+/**
+ * Clear all highlights from squares
+ */
+function clearHighlights() {
+    document.querySelectorAll('.valid-move, .capture-move').forEach(sq => {
+        sq.classList.remove('valid-move', 'capture-move');
+    });
+}
+
 /**
  * Clear all selections and highlights
  */
 function clearSelection() {
     gameState.selectedSquare = null;
     gameState.legalMoves = [];
-    
-    document.querySelectorAll('.square').forEach(square => {
-        square.classList.remove('selected', 'valid-move', 'capture-move');
+
+    // Clear highlights
+    clearHighlights();
+
+    // Clear selection
+    document.querySelectorAll('.selected').forEach(square => {
+        square.classList.remove('selected');
     });
 }
 
@@ -782,7 +807,9 @@ function handleWebSocketMessage(data) {
             break;
             
         case 'move':
-            handleOpponentMove(data.move);
+            console.log('✅ Move confirmed by server:', data.move);
+            // Don't re-execute human moves (already executed locally)
+            // Only execute if this is an opponent's move or if local execution failed
             break;
             
         case 'ai_move':
@@ -797,12 +824,16 @@ function handleWebSocketMessage(data) {
         case 'connected':
             console.log('Connected to game server');
             break;
-            
+
+        case 'game-ended':
+            handleGameEnded(data);
+            break;
+
         case 'error':
             console.error('Server error:', data.message);
             alert(`Error: ${data.message}`);
             break;
-            
+
         default:
             console.log('Unknown message type:', data.type);
     }
@@ -858,6 +889,62 @@ function handleAIMove(move) {
 }
 
 /**
+ * Handle game ended message from server
+ * @param {Object} data - Game ended data
+ */
+function handleGameEnded(data) {
+    console.log('🏁 Game ended:', data);
+
+    const result = data.result;
+    let message = 'Game ended';
+
+    switch (result.type) {
+        case 'checkmate':
+            message = `Checkmate! ${result.winner.charAt(0).toUpperCase() + result.winner.slice(1)} wins!`;
+            break;
+        case 'stalemate':
+            message = 'Stalemate! Game is a draw.';
+            break;
+        case 'draw':
+            message = 'Game ended in a draw.';
+            break;
+        case 'resignation':
+            message = `${result.winner.charAt(0).toUpperCase() + result.winner.slice(1)} wins by resignation!`;
+            break;
+        case 'timeout':
+            message = `${result.winner.charAt(0).toUpperCase() + result.winner.slice(1)} wins on time!`;
+            break;
+        default:
+            message = `Game ended: ${result.type}`;
+    }
+
+    // Stop all timers
+    clearInterval(gameTimers.whiteInterval);
+    clearInterval(gameTimers.blackInterval);
+
+    // Update game state
+    gameState.gameOver = true;
+    gameState.gameResult = result;
+
+    // Clear legal moves and highlights
+    gameState.legalMoves = [];
+    clearHighlights();
+
+    // Update status display
+    const gameStatusElement = document.getElementById('game-status');
+    if (gameStatusElement) {
+        gameStatusElement.textContent = message;
+        gameStatusElement.style.fontWeight = 'bold';
+        gameStatusElement.style.color = result.type === 'checkmate' ? '#ff4444' : '#4444ff';
+    }
+
+    // Show alert
+    alert(message);
+
+    console.log(`🎮 Game over: ${message}`);
+}
+
+/**
  * Handle legal moves response from server
  * @param {Object} data - Legal moves data
  */
@@ -869,29 +956,42 @@ function handleLegalMovesResponse(data) {
 }
 
 /**
- * Handle opponent move
+ * Execute confirmed move from server (player or opponent)
  * @param {Object} move - Move data
  */
-function handleOpponentMove(move) {
+function executeConfirmedMove(move) {
     if (!move || !move.from || !move.to) return;
-    
+
+    console.log(`🎯 Executing confirmed move: ${move.from} → ${move.to}`);
+
     const fromSquare = document.getElementById(move.from);
     const toSquare = document.getElementById(move.to);
     const piece = fromSquare.querySelector('.piece');
-    
+
     if (piece) {
+        // Handle promotion - replace piece if promoted
+        if (move.promotion) {
+            const promotionPieces = {
+                white: { q: '♕', r: '♖', n: '♘' },
+                black: { q: '♛', r: '♜', n: '♞' }
+            };
+            const pieceColor = piece.textContent === '♙' ? 'white' : 'black';
+            piece.textContent = promotionPieces[pieceColor][move.promotion];
+            console.log(`👑 Pawn promoted to ${move.promotion}`);
+        }
+
         fromSquare.removeChild(piece);
-        
+
         const capturedPiece = toSquare.querySelector('.piece');
         if (capturedPiece) {
             toSquare.removeChild(capturedPiece);
         }
-        
+
         toSquare.appendChild(piece);
-        
+
         gameState.board[move.to] = gameState.board[move.from];
         gameState.board[move.from] = '';
-        
+
         updateLastMoveHighlight(move.from, move.to);
         addMoveToHistory(move.from, move.to, gameState.board[move.to], !!capturedPiece);
         switchTurn();
@@ -924,14 +1024,32 @@ function handleChatMessage(message) {
  */
 function sendMoveToServer(from, to) {
     if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
-        gameSocket.send(JSON.stringify({
-            type: 'move',
-            gameId: gameState.gameId,
-            move: { from, to },
-            timestamp: Date.now()
-        }));
+        // Check if this is a pawn promotion move
+        const piece = gameState.board[from];
+        const isPawn = piece && (piece === '♙' || piece === '♟'); // White pawn or black pawn
+        const toRank = parseInt(to[1]);
+        const isPromotion = isPawn && ((piece === '♙' && toRank === 6) || (piece === '♟' && toRank === 1));
+
+        if (isPromotion) {
+            // Auto-promote to queen
+            gameSocket.send(JSON.stringify({
+                type: 'move',
+                gameId: gameState.gameId,
+                move: { from, to, promotion: 'q' },
+                timestamp: Date.now()
+            }));
+        } else {
+            // Send normal move
+            gameSocket.send(JSON.stringify({
+                type: 'move',
+                gameId: gameState.gameId,
+                move: { from, to },
+                timestamp: Date.now()
+            }));
+        }
     }
 }
+
 
 /**
  * Trigger AI move (simplified)
