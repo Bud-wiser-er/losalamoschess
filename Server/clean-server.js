@@ -751,9 +751,10 @@ async triggerAIMove(gameId, currentFEN) {
 }
     async handleChat(ws, message) {
         const { text, gameId } = message;
-        
+
         if (!text || !gameId) return;
 
+        // Broadcast to other players only, excluding the sender to prevent duplication
         this.broadcastToRoom(gameId, {
             type: 'chat',
             message: {
@@ -761,7 +762,7 @@ async triggerAIMove(gameId, currentFEN) {
                 text: text.substring(0, 200),
                 timestamp: Date.now()
             }
-        });
+        }, ws); // Exclude the sender
     }
 
     broadcastToRoom(gameId, message, exclude = null) {
