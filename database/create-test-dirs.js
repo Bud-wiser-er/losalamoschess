@@ -21,12 +21,12 @@ function createTestStructure() {
             try {
                 if (!fs.existsSync(dir)) {
                     fs.mkdirSync(dir, { recursive: true });
-                    console.log(`✓ Created directory: ${path.relative(baseDir, dir)}`);
+                    console.log(`Created directory: ${path.relative(baseDir, dir)}`);
                 } else {
                     console.log(`- Directory already exists: ${path.relative(baseDir, dir)}`);
                 }
             } catch (error) {
-                console.error(`✗ Failed to create directory ${dir}: ${error.message}`);
+                console.error(`Failed to create directory ${dir}: ${error.message}`);
             }
         });
         
@@ -52,7 +52,7 @@ function createTestStructure() {
             try {
                 if (!fs.existsSync(file.path)) {
                     fs.writeFileSync(file.path, file.content, 'utf8');
-                    console.log(`✓ Created file: ${path.relative(baseDir, file.path)}`);
+                    console.log(`Created file: ${path.relative(baseDir, file.path)}`);
                 } else {
                     console.log(`- File already exists: ${path.relative(baseDir, file.path)}`);
                 }
@@ -61,7 +61,7 @@ function createTestStructure() {
             }
         });
         
-        console.log('\n✅ Database test structure created successfully!');
+        console.log('\nDatabase test structure created successfully');
         console.log('\nYour directory structure:');
         console.log('database/');
         console.log('├── tests/');
