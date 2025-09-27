@@ -158,9 +158,11 @@ let emailInitialized = false;
  */
 class SecurityIntegratedWebSocketHandler {
     constructor() {
-        this.connections = new Map(); 
-        this.gameRooms = new Map();   
-        
+        this.connections = new Map();
+        this.gameRooms = new Map();
+        // BAN: Added bot configuration storage for each game
+        this.gameConfigs = new Map(); // Store bot level and ELO for each game
+
         // Initialize security validator (which includes Byron's engine)
         this.securityValidator = new SecurityMoveValidator();
         console.log('🔒 Security validator initialized for WebSocket handler');
@@ -216,18 +218,215 @@ class SecurityIntegratedWebSocketHandler {
             case 'join_game':
             await this.handleJoinGame(ws, message);
             break;
-            
+
         case 'move':
             await this.handlePlayerMove(ws, message);
             break;
-            
+
         case 'get_legal_moves':
             await this.handleGetLegalMoves(ws, message);
-            break;    
-            default:
+            break;
+
+        // BAN: Added AI move request handling for different bot levels
+        case 'ai_move_request':
+            await this.handleAIMoveRequest(ws, message);
+            break;
+
+        default:
                 console.log(`❓ Unknown message type: ${message.type}`);
         }
     }
+/**
+ * BAN: Handle AI move requests with bot level selection
+ * Handle AI move request from frontend with specific bot level and ELO
+ */
+async handleAIMoveRequest(ws, message) {
+    const { gameId, botLevel, currentFen, elo } = message;
+
+    console.log(`🤖 AI move requested - Level: ${botLevel}, ELO: ${elo}, FEN: ${currentFen}`);
+
+    try {
+        // Load and initialize AI bot
+        const AIBot = require('../backend/src/ai-bot/index');
+        const aiBot = new AIBot();
+
+        // Prepare AI request with bot level configuration
+        const aiRequest = {
+            fen: currentFen,
+            level: botLevel || 'L2', // Default to L2 if not specified
+            msCap: 5000, // 5 second timeout
+        };
+
+        // Add ELO for L4 bot level
+        if (botLevel === 'L4' && elo) {
+            aiRequest.elo = parseInt(elo);
+        }
+
+        console.log(`📤 Sending request to AI bot:`, aiRequest);
+
+        // Generate AI move
+        const aiResponse = await aiBot.generateMove(aiRequest);
+
+        if (aiResponse.ok && aiResponse.move) {
+            console.log(`✅ AI move generated:`, aiResponse.move);
+
+            // BAN: Apply AI move through security validator to get new FEN
+            const uciMove = aiResponse.move;
+            const mockReq = {
+                body: {
+                    gameId: gameId,
+                    move: uciMove,
+                    currentFEN: currentFen
+                },
+                user: { id: 'ai_bot', isAI: true }
+            };
+
+            let aiMoveResult = null;
+            const mockRes = {
+                json: (data) => { aiMoveResult = data; },
+                status: (code) => ({ json: (data) => { aiMoveResult = { ...data, statusCode: code }; }})
+            };
+
+            // Validate and apply the AI move
+            await this.securityValidator.validateMoveSecure(mockReq, mockRes);
+
+            if (aiMoveResult && aiMoveResult.legal) {
+                // Update game state
+                this.securityValidator.gameStates.set(gameId, {
+                    fen: aiMoveResult.newFEN,
+                    activeColor: aiMoveResult.activeColor,
+                    status: aiMoveResult.gameStatus,
+                    moveCount: aiMoveResult.moveCount,
+                    lastMove: uciMove,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Send AI move back to the game
+                ws.send(JSON.stringify({
+                    type: 'ai_move',
+                    gameId,
+                    move: {
+                        from: aiResponse.move.substring(0, 2),
+                        to: aiResponse.move.substring(2, 4),
+                        uci: aiResponse.move,
+                        fen: aiMoveResult.newFEN,
+                        activeColor: aiMoveResult.activeColor
+                    },
+                    evaluation: aiResponse.evaluation,
+                    depth: aiResponse.depth,
+                    nodes: aiResponse.nodes,
+                    timeMs: aiResponse.timeMs,
+                    elo: aiResponse.elo,
+                    timestamp: new Date().toISOString()
+                }));
+
+                // Also broadcast to other players in the game
+                this.broadcastToRoom(gameId, {
+                    type: 'ai_move',
+                    move: {
+                        from: aiResponse.move.substring(0, 2),
+                        to: aiResponse.move.substring(2, 4),
+                        uci: aiResponse.move,
+                        fen: aiMoveResult.newFEN,
+                        activeColor: aiMoveResult.activeColor
+                    },
+                    timestamp: new Date().toISOString()
+                }, ws);
+
+                // BAN: Check for checkmate/stalemate after AI move
+                try {
+                    const RulesEngine = require('../backend/src/engine/index');
+                    const rulesEngine = new RulesEngine();
+                    const legalMoves = rulesEngine.getLegalMoves(aiMoveResult.newFEN);
+
+                    if (legalMoves.length === 0) {
+                        const board = rulesEngine.parseFEN(aiMoveResult.newFEN);
+                        const gameStatus = rulesEngine.checkGameStatus(board);
+
+                        if (gameStatus.type === 'CHECKMATE') {
+                            // BAN: Fixed winner logic in handleAIMoveRequest too
+                            const winner = board.turn === 'w' ? 'black' : 'white';
+                            console.log(`🏆 AI move resulted in checkmate! Board turn: ${board.turn}, Winner: ${winner}`);
+                            console.log(`📡 Broadcasting checkmate message to room: ${gameId}`);
+
+                            // Update game state to ended
+                            this.securityValidator.gameStates.set(gameId, {
+                                ...this.securityValidator.gameStates.get(gameId),
+                                status: 'ended',
+                                result: 'checkmate',
+                                winner: winner
+                            });
+
+                            const gameEndedMessage = {
+                                type: 'game-ended',
+                                result: {
+                                    type: 'checkmate',
+                                    winner: winner
+                                },
+                                details: `Checkmate! ${winner.charAt(0).toUpperCase() + winner.slice(1)} wins.`,
+                                timestamp: Date.now()
+                            };
+
+                            console.log(`📤 Sending game-ended message:`, gameEndedMessage);
+                            this.broadcastToRoom(gameId, gameEndedMessage);
+
+                        } else if (gameStatus.type === 'STALEMATE') {
+                            console.log(`🤝 AI move resulted in stalemate!`);
+
+                            // Update game state to ended
+                            this.securityValidator.gameStates.set(gameId, {
+                                ...this.securityValidator.gameStates.get(gameId),
+                                status: 'ended',
+                                result: 'stalemate',
+                                winner: null
+                            });
+
+                            this.broadcastToRoom(gameId, {
+                                type: 'game-ended',
+                                result: {
+                                    type: 'stalemate',
+                                    winner: null
+                                },
+                                details: 'Stalemate! The game is a draw.',
+                                timestamp: Date.now()
+                            });
+                        }
+                    }
+                } catch (endGameError) {
+                    console.error('❌ Error checking for game end after AI move:', endGameError);
+                }
+
+            } else {
+                console.error('❌ AI move validation failed:', aiMoveResult);
+                ws.send(JSON.stringify({
+                    type: 'error',
+                    message: 'AI move validation failed',
+                    details: aiMoveResult?.details || 'Unknown error'
+                }));
+            }
+
+        } else {
+            console.error('❌ AI move generation failed:', aiResponse);
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: `AI move generation failed: ${aiResponse.error || 'Unknown error'}`,
+                details: aiResponse.details
+            }));
+        }
+
+        // Cleanup AI bot
+        await aiBot.cleanup();
+
+    } catch (error) {
+        console.error('❌ AI move request error:', error);
+        ws.send(JSON.stringify({
+            type: 'error',
+            message: 'AI move generation failed',
+            details: error.message
+        }));
+    }
+}
+
 /**
  * Handle player move and trigger AI response
  */
@@ -278,10 +477,14 @@ async handlePlayerMove(ws, message) {
         
         console.log(`✅ Player move applied: ${uciMove}`);
         
-        // Check if game is against AI (you can add logic to determine this)
-        // For now, always trigger AI move after player move
+        // BAN: Use stored bot configuration for AI moves
+        // Trigger AI move with configured bot level
+        const gameConfig = this.gameConfigs.get(gameId);
+        const botLevel = gameConfig?.botLevel || 'L2';
+        const elo = gameConfig?.elo || null;
+
         setTimeout(() => {
-            this.triggerAIMove(gameId, moveResult.fen);
+            this.triggerAIMove(gameId, moveResult.fen, botLevel, elo);
         }, 500); // Small delay for better UX
         
     } catch (error) {
@@ -294,15 +497,25 @@ async handlePlayerMove(ws, message) {
 }
 
    async handleJoinGame(ws, message) {
-    const { gameId } = message;
-    
+    const { gameId, botLevel, elo } = message;
+
     if (!gameId) {
         this.sendError(ws, 'Game ID required');
         return;
     }
-    
+
     // Set game ID for this connection
     ws.gameId = gameId;
+
+    // BAN: Store bot configuration for this game
+    if (botLevel) {
+        this.gameConfigs.set(gameId, {
+            botLevel: botLevel,
+            elo: elo ? parseInt(elo) : null,
+            timestamp: Date.now()
+        });
+        console.log(`🤖 Game ${gameId} configured with bot level: ${botLevel}${elo ? ` (ELO: ${elo})` : ''}`);
+    }
     
     // Set a demo user ID if not authenticated
     if (!ws.userId) {
@@ -351,23 +564,31 @@ async handlePlayerMove(ws, message) {
 }
 
 /**
+ * BAN: Updated to support bot level and ELO configuration
  * Trigger AI bot move
  * @param {string} gameId - Game ID
  * @param {string} currentFen - Current board state in FEN
+ * @param {string} botLevel - Bot level (L0-L4), defaults to L2
+ * @param {number} elo - ELO rating for L4 bot
  */
-async triggerAIMove(gameId, currentFEN) {
+async triggerAIMove(gameId, currentFEN, botLevel = 'L2', elo = null) {
     try {
-        console.log(`🤖 Triggering AI move for game: ${gameId}`);
-        
+        console.log(`🤖 Triggering AI move for game: ${gameId} with level: ${botLevel}`);
+
         const AIBot = require('../backend/src/ai-bot/index');
         const aiBot = new AIBot();
-        
+
         const botRequest = {
             fen: currentFEN,
-            level: 'L1',
-            msCap: 2000
+            level: botLevel,
+            msCap: 5000 // Increased timeout for better moves
         };
-        
+
+        // Add ELO for L4 bot level
+        if (botLevel === 'L4' && elo) {
+            botRequest.elo = parseInt(elo);
+        }
+
         console.log(`🤖 Bot request:`, botRequest);
         
         const botResponse = await aiBot.generateMove(botRequest);
@@ -442,34 +663,27 @@ async triggerAIMove(gameId, currentFEN) {
         const uciMove = botResponse.move;
         const from = uciMove.substring(0, 2);
         const to = uciMove.substring(2, 4);
-        
-        // Validate the AI's move through security
+
+        // BAN: Validate the AI's move through security and check for checkmate
         const mockReq = {
             body: {
                 gameId: gameId,
                 move: uciMove,
                 currentFEN: currentFEN
             },
-            user: { id: 'ai_bot' }
+            user: { id: 'ai_bot', isAI: true } // Mark as AI request
         };
-        
+
         let aiMoveResult = null;
         const mockRes = {
             json: (data) => { aiMoveResult = data; },
             status: (code) => ({ json: (data) => { aiMoveResult = { ...data, statusCode: code }; }})
         };
-        
-        // **FIXED: Bypass turn validation for AI moves**
-        // AI bot moves should not be subject to turn validation since they are generated by the system
-        const mockReqAI = {
-            ...mockReq,
-            user: { id: 'ai_bot', isAI: true } // Mark as AI request
-        };
 
-        await this.securityValidator.validateMoveSecure(mockReqAI, mockRes);
+        await this.securityValidator.validateMoveSecure(mockReq, mockRes);
 
         if (aiMoveResult && aiMoveResult.legal) {
-            // **FIXED: Properly update the game state in security validator**
+            // Update the game state in security validator
             this.securityValidator.gameStates.set(gameId, {
                 fen: aiMoveResult.newFEN,
                 activeColor: aiMoveResult.activeColor,
@@ -478,9 +692,9 @@ async triggerAIMove(gameId, currentFEN) {
                 lastMove: uciMove,
                 timestamp: new Date().toISOString()
             });
-            
+
             console.log(`🎮 Game state updated: ${aiMoveResult.activeColor} to move`);
-            
+
             // Broadcast AI move to all clients
             this.broadcastToRoom(gameId, {
                 type: 'ai_move',
@@ -494,10 +708,82 @@ async triggerAIMove(gameId, currentFEN) {
                 evaluation: botResponse.eval,
                 timestamp: Date.now()
             });
-            
+
             console.log(`✅ AI move executed: ${from} -> ${to}`);
+
+            // BAN: Check for checkmate/stalemate after AI move (same as handleAIMoveRequest)
+            try {
+                const RulesEngine = require('../backend/src/engine/index');
+                const rulesEngine = new RulesEngine();
+                const legalMoves = rulesEngine.getLegalMoves(aiMoveResult.newFEN);
+
+                console.log(`🔍 Checking game end: ${legalMoves.length} legal moves available`);
+                console.log(`📊 Current FEN: ${aiMoveResult.newFEN}`);
+
+                if (legalMoves.length === 0) {
+                    const board = rulesEngine.parseFEN(aiMoveResult.newFEN);
+                    const gameStatus = rulesEngine.checkGameStatus(board);
+
+                    console.log(`🎯 Game status check: ${gameStatus.type}`);
+                    console.log(`🎲 Board turn after AI move: ${board.turn} (w=white, b=black)`);
+                    console.log(`🤖 AI just moved (AI is black), now it's ${board.turn === 'w' ? 'white' : 'black'}'s turn`);
+
+                    if (gameStatus.type === 'CHECKMATE') {
+                        // BAN: The side whose turn it is cannot move (is checkmated)
+                        // The winner is the side that just moved (opposite of current turn)
+                        const winner = board.turn === 'w' ? 'black' : 'white';
+                        console.log(`🏆 CHECKMATE! Turn: ${board.turn}, Checkmated: ${board.turn === 'w' ? 'white' : 'black'}, Winner: ${winner}`);
+                        console.log(`📡 Broadcasting checkmate message to room: ${gameId}`);
+
+                        // Update game state to ended
+                        this.securityValidator.gameStates.set(gameId, {
+                            ...this.securityValidator.gameStates.get(gameId),
+                            status: 'ended',
+                            result: 'checkmate',
+                            winner: winner
+                        });
+
+                        const gameEndedMessage = {
+                            type: 'game-ended',
+                            result: {
+                                type: 'checkmate',
+                                winner: winner
+                            },
+                            details: `Checkmate! ${winner.charAt(0).toUpperCase() + winner.slice(1)} wins.`,
+                            timestamp: Date.now()
+                        };
+
+                        console.log(`📤 Sending game-ended message:`, gameEndedMessage);
+                        this.broadcastToRoom(gameId, gameEndedMessage);
+
+                    } else if (gameStatus.type === 'STALEMATE') {
+                        console.log(`🤝 AI move resulted in stalemate!`);
+
+                        // Update game state to ended
+                        this.securityValidator.gameStates.set(gameId, {
+                            ...this.securityValidator.gameStates.get(gameId),
+                            status: 'ended',
+                            result: 'stalemate',
+                            winner: null
+                        });
+
+                        this.broadcastToRoom(gameId, {
+                            type: 'game-ended',
+                            result: {
+                                type: 'stalemate',
+                                winner: null
+                            },
+                            details: 'Stalemate! The game is a draw.',
+                            timestamp: Date.now()
+                        });
+                    }
+                }
+            } catch (endGameError) {
+                console.error('❌ Error checking for game end after AI move:', endGameError);
+            }
+
         } else {
-            console.error('❌ AI move validation failed');
+            console.error('❌ AI move validation failed:', aiMoveResult);
         }
 
         // Cleanup AI bot
@@ -684,8 +970,9 @@ async triggerAIMove(gameId, currentFEN) {
             const gameStatus = rulesEngine.checkGameStatus(board);
 
             if (gameStatus.type === 'CHECKMATE') {
+                // BAN: Fixed winner logic for player moves too
                 const winner = board.turn === 'w' ? 'black' : 'white';
-                console.log(`🏆 Player move resulted in checkmate! Winner: ${winner}`);
+                console.log(`🏆 Player move resulted in checkmate! Board turn: ${board.turn}, Winner: ${winner}`);
 
                 // Update game state to ended
                 this.securityValidator.gameStates.set(gameId || ws.gameId, {
@@ -732,12 +1019,18 @@ async triggerAIMove(gameId, currentFEN) {
         console.error('❌ Error checking for game end:', endGameError);
     }
 
-    // Trigger AI bot if it's now AI's turn and game is not over
+    // BAN: Trigger AI bot with configured level if it's now AI's turn and game is not over
     const activeColor = securityResult.activeColor;
     if (activeColor === 'black') {
         console.log('🤖 AI turn detected, triggering bot move...');
+
+        // Get bot configuration for this game
+        const gameConfig = this.gameConfigs.get(gameId || ws.gameId);
+        const botLevel = gameConfig?.botLevel || 'L2';
+        const elo = gameConfig?.elo || null;
+
         setTimeout(() => {
-            this.triggerAIMove(gameId || ws.gameId, securityResult.newFEN);
+            this.triggerAIMove(gameId || ws.gameId, securityResult.newFEN, botLevel, elo);
         }, 800);
     }
 
