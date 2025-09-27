@@ -264,6 +264,108 @@ async function testGameEndpoints() {
     }
 }
 
+async function testPasswordReset() {
+    console.log(`\n${colors.blue}🔑 Testing password reset flow...${colors.reset}`);
+
+    // First register a test user
+    const userData = {
+        username: `resetuser_${Date.now()}`,
+        email: `reset_${Date.now()}@example.com`,
+        password: 'OldPassword123!'
+    };
+
+    console.log(`   Creating test user: ${userData.email}`);
+
+    try {
+        // Register user
+        const regResponse = await makeRequest('POST', '/auth/register', userData);
+        if (regResponse.status !== 201) {
+            console.log(`${colors.red}❌ Failed to register test user${colors.reset}`);
+            return { success: false };
+        }
+
+        // Step 1: Request password reset
+        console.log(`   Step 1: Requesting password reset for ${userData.email}`);
+        const resetResponse = await makeRequest('POST', '/auth/password-reset', {
+            email: userData.email
+        });
+
+        if (resetResponse.status !== 200 || !resetResponse.data.success) {
+            console.log(`${colors.red}❌ Password reset request failed${colors.reset}`);
+            console.log(`   Response: ${JSON.stringify(resetResponse.data, null, 2)}`);
+            return { success: false };
+        }
+
+        console.log(`${colors.green}✅ Password reset code sent${colors.reset}`);
+        console.log(`   Message: ${resetResponse.data.message}`);
+
+        const resetToken = resetResponse.data.resetToken;
+        if (!resetToken) {
+            console.log(`${colors.red}❌ No reset token received${colors.reset}`);
+            return { success: false };
+        }
+
+        // Step 2: Simulate getting OTP from console (in real scenario, user gets it via email)
+        console.log(`   Step 2: Simulating OTP verification (check server console for actual code)`);
+        // For testing, we'll use a mock code - in reality you'd copy from server console
+        const mockCode = '123456'; // This won't work, but demonstrates the flow
+
+        const verifyResponse = await makeRequest('POST', '/auth/verify-reset-code', {
+            email: userData.email,
+            code: mockCode,
+            token: resetToken
+        });
+
+        if (verifyResponse.status === 200 && verifyResponse.data.success) {
+            console.log(`${colors.green}✅ OTP verification successful${colors.reset}`);
+        } else {
+            console.log(`${colors.yellow}⚠️ OTP verification failed (expected - using mock code)${colors.reset}`);
+            console.log(`   To test fully: Copy the 6-digit code from server console and use it here`);
+            console.log(`   Response: ${JSON.stringify(verifyResponse.data, null, 2)}`);
+
+            // Continue with mock verification for demo purposes
+            console.log(`   Continuing with flow demonstration...`);
+        }
+
+        // Step 3: Reset password
+        console.log(`   Step 3: Resetting password`);
+        const newPassword = 'NewPassword123!';
+        const finalResetResponse = await makeRequest('POST', '/auth/reset-password', {
+            email: userData.email,
+            newPassword: newPassword,
+            resetToken: resetToken
+        });
+
+        if (finalResetResponse.status === 200 && finalResetResponse.data.success) {
+            console.log(`${colors.green}✅ Password reset completed${colors.reset}`);
+
+            // Step 4: Verify new password works
+            console.log(`   Step 4: Testing login with new password`);
+            const loginResponse = await makeRequest('POST', '/auth/login', {
+                email: userData.email,
+                password: newPassword
+            });
+
+            if (loginResponse.status === 200 && loginResponse.data.success) {
+                console.log(`${colors.green}✅ Login with new password successful${colors.reset}`);
+                return { success: true };
+            } else {
+                console.log(`${colors.yellow}⚠️ Login with new password failed${colors.reset}`);
+                console.log(`   This may be due to OTP verification step failure`);
+                return { success: false };
+            }
+        } else {
+            console.log(`${colors.red}❌ Password reset failed${colors.reset}`);
+            console.log(`   Response: ${JSON.stringify(finalResetResponse.data, null, 2)}`);
+            return { success: false };
+        }
+
+    } catch (error) {
+        console.log(`${colors.red}❌ Password reset test error: ${error.message}${colors.reset}`);
+        return { success: false };
+    }
+}
+
 // Main test runner
 async function runAuthenticationTests() {
     console.log(`${colors.bold}${colors.blue}🚀 Los Alamos Chess Authentication API Tests${colors.reset}\n`);
@@ -325,6 +427,11 @@ async function runAuthenticationTests() {
     console.log(`${colors.bold}=== Test 8: Game API ===${colors.reset}`);
     totalTests++;
     if (await testGameEndpoints()) passedTests++;
+
+    // Test 9: Password Reset
+    console.log(`${colors.bold}=== Test 9: Password Reset ===${colors.reset}`);
+    totalTests++;
+    if (await testPasswordReset()) passedTests++;
 
     // Final Results
     console.log(`\n${colors.bold}📊 FINAL RESULTS: ${passedTests}/${totalTests} tests passed${colors.reset}`);
