@@ -95,13 +95,33 @@ class AIBot {
         
         // Get legal moves
         const legalMoves = this.rulesEngine.getLegalMoves(fen);
-        
+
         if (legalMoves.length === 0) {
-            return {
-                ok: false,
-                error: 'NO_LEGAL_MOVES',
-                details: 'No legal moves available in this position'
-            };
+            // Check if this is checkmate or stalemate
+            const board = this.rulesEngine.parseFEN(fen);
+            const gameStatus = this.rulesEngine.checkGameStatus(board);
+
+            if (gameStatus.type === 'CHECKMATE') {
+                return {
+                    ok: true,
+                    checkmate: true,
+                    winner: board.turn === 'w' ? 'black' : 'white',
+                    details: `Checkmate! ${board.turn === 'w' ? 'Black' : 'White'} wins.`
+                };
+            } else if (gameStatus.type === 'STALEMATE') {
+                return {
+                    ok: true,
+                    stalemate: true,
+                    result: 'draw',
+                    details: 'Stalemate! The game is a draw.'
+                };
+            } else {
+                return {
+                    ok: false,
+                    error: 'NO_LEGAL_MOVES',
+                    details: 'No legal moves available in this position'
+                };
+            }
         }
         
         // Execute strategy with timeout
