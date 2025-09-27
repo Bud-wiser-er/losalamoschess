@@ -12,7 +12,7 @@ try {
     TestFramework = require('../test-framework');
 } catch (error) {
     // Fallback to same directory (when file is in database/ root)
-    TestFramework = require('./test-framework');
+    TestFramework = require('../test-framework');
 }
 
 const bcrypt = require('bcrypt');

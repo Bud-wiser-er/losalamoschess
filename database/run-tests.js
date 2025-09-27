@@ -157,8 +157,10 @@ async function runDatabaseTests() {
  * Only keeps the latest report (overwrites previous one)
  */
 async function generateTestReport(results) {
-    // Ensure test_reports directory exists
-    const reportsDir = path.join(__dirname, 'test_reports');
+    // Always save reports to /database/test_reports regardless of where script is run from
+    const projectRoot = process.cwd();
+    const reportsDir = path.join(projectRoot, 'database', 'test_reports');
+    
     if (!fs.existsSync(reportsDir)) {
         fs.mkdirSync(reportsDir, { recursive: true });
         console.log(`Created test_reports directory: ${reportsDir}`);

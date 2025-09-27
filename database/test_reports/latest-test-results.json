@@ -1,0 +1,100 @@
+{
+  "passed": 12,
+  "failed": 3,
+  "errors": [
+    {
+      "id": "DB-04",
+      "message": "Test execution error: relation \"moves\" does not exist",
+      "stack": "error: relation \"moves\" does not exist\n    at C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\node_modules\\pg\\lib\\client.js:545:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-core-tests.js:246:32)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
+    },
+    {
+      "id": "DB-06",
+      "message": "Test execution error: relation \"moves\" does not exist",
+      "stack": "error: relation \"moves\" does not exist\n    at C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\node_modules\\pg\\lib\\client.js:545:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-core-tests.js:390:17)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
+    },
+    {
+      "id": "DB-13",
+      "message": "Test execution error: insert or update on table \"tournament\" violates foreign key constraint \"tournament_created_by_fkey\"",
+      "stack": "error: insert or update on table \"tournament\" violates foreign key constraint \"tournament_created_by_fkey\"\n    at C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\node_modules\\pg\\lib\\client.js:545:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-advanced-tests.js:329:38)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
+    }
+  ],
+  "details": [
+    {
+      "id": "DB-01",
+      "status": "PASS",
+      "message": "User created with properly hashed password"
+    },
+    {
+      "id": "DB-02",
+      "status": "PASS",
+      "message": "Duplicate email correctly rejected with constraint violation"
+    },
+    {
+      "id": "DB-03",
+      "status": "PASS",
+      "message": "Game created with correct initial state"
+    },
+    {
+      "id": "DB-04",
+      "status": "ERROR",
+      "message": "relation \"moves\" does not exist"
+    },
+    {
+      "id": "DB-05",
+      "status": "PASS",
+      "message": "Optimistic locking working correctly"
+    },
+    {
+      "id": "DB-06",
+      "status": "ERROR",
+      "message": "relation \"moves\" does not exist"
+    },
+    {
+      "id": "DB-07",
+      "status": "PASS",
+      "message": "Audit log created with correct metadata"
+    },
+    {
+      "id": "DB-08",
+      "status": "PASS",
+      "message": "Rating constraints working correctly"
+    },
+    {
+      "id": "DB-09",
+      "status": "PASS",
+      "message": "Move modification correctly prevented by database trigger"
+    },
+    {
+      "id": "DB-10",
+      "status": "PASS",
+      "message": "Performance test passed: 100 users created in 217ms"
+    },
+    {
+      "id": "DB-11",
+      "status": "PASS",
+      "message": "Foreign key constraint correctly prevented game creation with non-existent players"
+    },
+    {
+      "id": "DB-12",
+      "status": "PASS",
+      "message": "Index performance test passed: Email lookup completed in 0ms"
+    },
+    {
+      "id": "DB-13",
+      "status": "ERROR",
+      "message": "insert or update on table \"tournament\" violates foreign key constraint \"tournament_created_by_fkey\""
+    },
+    {
+      "id": "DB-14",
+      "status": "PASS",
+      "message": "Friendship system working correctly"
+    },
+    {
+      "id": "DB-15",
+      "status": "PASS",
+      "message": "Data consistency maintained under concurrent load"
+    }
+  ],
+  "duration": 2894,
+  "coverage": 64
+}

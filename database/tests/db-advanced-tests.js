@@ -30,9 +30,10 @@ function registerAdvancedTests(framework) {
         'DB-08',
         'Rating constraints: User rating must be between 0 and 3000',
         async (client) => {
+            const timestamp = Date.now();
             const baseUser = {
-                username: 'constraintuser_' + Date.now(),
-                email: `constraint_${Date.now()}@example.com`,
+                username: 'constraintuser_' + timestamp,
+                email: `constraint_${timestamp}@example.com`,
                 password_hash: await bcrypt.hash('password123', 12)
             };
 
@@ -40,20 +41,32 @@ function registerAdvancedTests(framework) {
             const invalidRatings = [-100, 3001, -1, 5000];
             let constraintViolations = 0;
 
-            for (const rating of invalidRatings) {
+            for (let i = 0; i < invalidRatings.length; i++) {
+                const rating = invalidRatings[i];
+                
+                // Use a separate transaction for each test to avoid rollback issues
                 try {
+                    // Use a savepoint to isolate this operation
+                    await client.query('SAVEPOINT test_invalid_rating');
+                    
                     await client.query(`
                         INSERT INTO users (username, email, password_hash, rating)
                         VALUES ($1, $2, $3, $4)
                     `, [
-                        baseUser.username + '_' + rating,
-                        rating + '_' + baseUser.email,
+                        baseUser.username + '_invalid_' + rating + '_' + i,
+                        'invalid_' + rating + '_' + i + '_' + baseUser.email,
                         baseUser.password_hash,
                         rating
                     ]);
                     
+                    // If we get here, the constraint didn't work
+                    await client.query('ROLLBACK TO SAVEPOINT test_invalid_rating');
                     return { success: false, message: `Rating ${rating} should have been rejected`, expected: 'constraint error', actual: 'accepted invalid rating' };
+                    
                 } catch (error) {
+                    // Rollback to the savepoint to clear the error state
+                    await client.query('ROLLBACK TO SAVEPOINT test_invalid_rating');
+                    
                     if (error.message.includes('valid_rating') || error.code === '23514') {
                         constraintViolations++;
                     } else {
@@ -66,15 +79,16 @@ function registerAdvancedTests(framework) {
             const validRatings = [0, 1200, 2800, 3000];
             let validInsertions = 0;
 
-            for (const rating of validRatings) {
+            for (let i = 0; i < validRatings.length; i++) {
+                const rating = validRatings[i];
                 try {
                     const result = await client.query(`
                         INSERT INTO users (username, email, password_hash, rating)
                         VALUES ($1, $2, $3, $4)
                         RETURNING rating
                     `, [
-                        baseUser.username + '_valid_' + rating,
-                        'valid_' + rating + '_' + baseUser.email,
+                        baseUser.username + '_valid_' + rating + '_' + i,
+                        'valid_' + rating + '_' + i + '_' + baseUser.email,
                         baseUser.password_hash,
                         rating
                     ]);
@@ -131,32 +145,34 @@ function registerAdvancedTests(framework) {
 
             // Create a move
             const moveResult = await client.query(`
-                INSERT INTO moves (game_id, player_id, from_square, to_square, piece, move_notation, move_number)
-                VALUES ($1, $2, 'e2', 'e3', 'P', 'e3', 1)
-                RETURNING id, move_notation
-            `, [gameId, player1Id]);
+                INSERT INTO game_move (game_id, ply, by, uci, san, flags, prev_fen, next_fen)
+                VALUES ($1, 1, 'human', 'e2e3', 'e3', '{}', $2, $3)
+                RETURNING game_id, san
+            `, [gameId, 
+                'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1', // prev_fen
+                'rnqknr/pppppp/6/6/PPPP1P/RNQKPR w - - 0 2'   // next_fen
+            ]);
 
-            const moveId = moveResult.rows[0].id;
-            const originalNotation = moveResult.rows[0].move_notation;
+            const originalNotation = moveResult.rows[0].san;
 
             // Attempt to modify the move - this should fail if triggers are in place
             // Note: This test assumes you have triggers to prevent move modifications
             try {
                 const updateResult = await client.query(`
-                    UPDATE moves 
-                    SET move_notation = 'e4', to_square = 'e4'
-                    WHERE id = $1
-                `, [moveId]);
+                    UPDATE game_move 
+                    SET san = 'e4', uci = 'e2e4'
+                    WHERE game_id = $1 AND ply = 1
+                `, [gameId]);
 
                 // If update succeeded, check if the move was actually changed
                 const verifyResult = await client.query(`
-                    SELECT move_notation, to_square FROM moves WHERE id = $1
-                `, [moveId]);
+                    SELECT san, uci FROM game_move WHERE game_id = $1 AND ply = 1
+                `, [gameId]);
 
                 const updatedMove = verifyResult.rows[0];
 
                 // Check if move was actually modified
-                if (updatedMove.move_notation !== originalNotation || updatedMove.to_square !== 'e3') {
+                if (updatedMove.san !== originalNotation || updatedMove.uci !== 'e2e3') {
                     return { success: false, message: 'Move was modified when it should be immutable', expected: 'no change', actual: 'move changed' };
                 } else {
                     return { success: true, message: 'Move remained immutable (trigger protection working)' };
@@ -164,7 +180,7 @@ function registerAdvancedTests(framework) {
 
             } catch (error) {
                 // If update failed due to trigger or constraint, that's what we want
-                if (error.message.includes('prevent') || error.message.includes('immutable') || error.code === 'P0001') {
+                if (error.message.includes('prevent') || error.message.includes('immutable') || error.message.includes('append-only') || error.code === 'P0001') {
                     return { success: true, message: 'Move modification correctly prevented by database trigger' };
                 } else {
                     // Unexpected error
@@ -311,12 +327,13 @@ function registerAdvancedTests(framework) {
 
             // Create tournament
             const tournamentResult = await client.query(`
-                INSERT INTO tournaments (name, description, start_date, end_date, status, max_participants)
-                VALUES ($1, $2, NOW() + INTERVAL '1 day', NOW() + INTERVAL '7 days', 'upcoming', 16)
+                INSERT INTO tournament (name, description, start_time, end_time, status, max_participants, created_by)
+                VALUES ($1, $2, NOW() + INTERVAL '1 day', NOW() + INTERVAL '7 days', 'registration', 16, $3)
                 RETURNING id, name, status, max_participants
             `, [
                 `Test Tournament ${timestamp}`,
-                `Tournament for testing purposes - ${timestamp}`
+                `Tournament for testing purposes - ${timestamp}`,
+                '00000000-0000-0000-0000-000000000001' // Placeholder created_by (would need real user in production)
             ]);
 
             const tournament = tournamentResult.rows[0];
@@ -342,21 +359,21 @@ function registerAdvancedTests(framework) {
             // Enroll players in tournament
             for (const playerId of players) {
                 await client.query(`
-                    INSERT INTO tournament_participants (tournament_id, user_id, joined_at)
+                    INSERT INTO tournament_participant (tournament_id, user_id, joined_at)
                     VALUES ($1, $2, NOW())
                 `, [tournament.id, playerId]);
             }
 
             // Verify tournament and enrollments
             const participantCountResult = await client.query(`
-                SELECT COUNT(*) as count FROM tournament_participants WHERE tournament_id = $1
+                SELECT COUNT(*) as count FROM tournament_participant WHERE tournament_id = $1
             `, [tournament.id]);
 
             const participantCount = parseInt(participantCountResult.rows[0].count);
 
             const assertions = [
                 TestFramework.assert.notNull(tournament.id, 'Tournament ID should be generated'),
-                TestFramework.assert.equals(tournament.status, 'upcoming', 'Tournament status should be upcoming'),
+                TestFramework.assert.equals(tournament.status, 'registration', 'Tournament status should be registration'),
                 TestFramework.assert.equals(tournament.max_participants, 16, 'Max participants should be set correctly'),
                 TestFramework.assert.equals(participantCount, 3, 'All 3 players should be enrolled'),
             ];
@@ -392,7 +409,7 @@ function registerAdvancedTests(framework) {
 
             // Send friend request from user1 to user2
             const friendRequestResult = await client.query(`
-                INSERT INTO friendships (requester_id, addressee_id, status, created_at)
+                INSERT INTO friend (user_id, friend_id, status, created_at)
                 VALUES ($1, $2, 'pending', NOW())
                 RETURNING id, status, created_at
             `, [user1Id, user2Id]);
@@ -401,7 +418,7 @@ function registerAdvancedTests(framework) {
 
             // Accept friend request
             const acceptResult = await client.query(`
-                UPDATE friendships 
+                UPDATE friend 
                 SET status = 'accepted', updated_at = NOW()
                 WHERE id = $1
                 RETURNING status, updated_at
@@ -411,9 +428,9 @@ function registerAdvancedTests(framework) {
 
             // Verify friendship exists both ways (reciprocal)
             const friendshipCheckResult = await client.query(`
-                SELECT requester_id, addressee_id, status FROM friendships 
-                WHERE (requester_id = $1 AND addressee_id = $2) 
-                   OR (requester_id = $2 AND addressee_id = $1)
+                SELECT user_id, friend_id, status FROM friend 
+                WHERE (user_id = $1 AND friend_id = $2) 
+                   OR (user_id = $2 AND friend_id = $1)
             `, [user1Id, user2Id]);
 
             const friendships = friendshipCheckResult.rows;

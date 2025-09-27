@@ -117,14 +117,20 @@ class TestFramework {
                 await client.query('BEGIN');
                 try {
                     result = await test.testFunction(client);
-                    await client.query('ROLLBACK'); // Always rollback to keep tests isolated
-                } catch (error) {
+                    // Always rollback to keep tests isolated
                     await client.query('ROLLBACK');
+                } catch (error) {
+                    // Ensure rollback happens even on error
+                    try {
+                        await client.query('ROLLBACK');
+                    } catch (rollbackError) {
+                        console.log(`  WARNING: Rollback failed: ${rollbackError.message}`);
+                    }
                     throw error;
                 }
             }
             
-            if (result.success) {
+            if (result && result.success) {
                 console.log(`  PASS: ${result.message}`);
                 this.results.passed++;
                 this.results.details.push({
@@ -134,7 +140,7 @@ class TestFramework {
                     expected: result.expected,
                     actual: result.actual
                 });
-            } else {
+            } else if (result) {
                 console.log(`  FAIL: ${result.message}`);
                 this.results.failed++;
                 this.results.errors.push({
@@ -149,6 +155,18 @@ class TestFramework {
                     message: result.message,
                     expected: result.expected,
                     actual: result.actual
+                });
+            } else {
+                console.log(`  ERROR: Test returned no result`);
+                this.results.failed++;
+                this.results.errors.push({
+                    id: test.id,
+                    message: 'Test function returned no result'
+                });
+                this.results.details.push({
+                    id: test.id,
+                    status: 'ERROR',
+                    message: 'Test function returned no result'
                 });
             }
             
