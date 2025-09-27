@@ -35,8 +35,12 @@ try {
                 legal: true,
                 move: req.body.move,
                 message: 'Fallback validation - security validator not available'
+                
             });
+            
+        
         }
+        
         async getLegalMovesSecure(req, res) {
             return res.json({
                 success: true,
@@ -133,7 +137,7 @@ function generateResetCode() {
 // Email configuration
 let emailTransporter = null;
 if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-    emailTransporter = nodemailer.createTransporter({
+    emailTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: process.env.EMAIL_USER,
@@ -205,101 +209,305 @@ class SecurityIntegratedWebSocketHandler {
             case 'chat':
                 await this.handleChat(ws, message);
                 break;
+            case 'join_game':
+            await this.handleJoinGame(ws, message);
+            break;
+            
+        case 'move':
+            await this.handlePlayerMove(ws, message);
+            break;
+            
+        case 'get_legal_moves':
+            await this.handleGetLegalMoves(ws, message);
+            break;    
             default:
                 console.log(`❓ Unknown message type: ${message.type}`);
         }
     }
-
-    async handleJoinGame(ws, message) {
-        const { gameId } = message;
+/**
+ * Handle player move and trigger AI response
+ */
+async handlePlayerMove(ws, message) {
+    const { gameId, move, currentFen } = message;
+    
+    try {
+        console.log(`♟️ Player move received: ${move.from} → ${move.to}`);
         
-        ws.gameId = gameId || 'demo_game';
-        ws.userId = ws.userId || 'demo_user';
+        // Import Byron's engine
+        const { validateMove, applyMove } = require('../backend/src/engine/index');
         
-        if (!this.gameRooms.has(ws.gameId)) {
-            this.gameRooms.set(ws.gameId, new Set());
+        // Validate the player's move
+        const uciMove = `${move.from}${move.to}`;
+        const validation = validateMove(currentFen || this.generateFENFromGameState(gameId), uciMove);
+        
+        if (!validation.valid) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: `Illegal move: ${validation.error}`
+            }));
+            return;
         }
-        this.gameRooms.get(ws.gameId).add(ws);
-
-        // Initialize game session in security validator
-        try {
-            this.securityValidator.initGameSession(ws.gameId, ws.userId, 'ai');
-            console.log(`🔒 Game session initialized in security layer: ${ws.gameId}`);
-        } catch (error) {
-            console.warn('⚠️ Game session initialization skipped:', error.message);
+        
+        // Apply the move
+        const moveResult = applyMove(currentFen || this.generateFENFromGameState(gameId), uciMove);
+        
+        if (!moveResult.valid) {
+            ws.send(JSON.stringify({
+                type: 'error',
+                message: `Failed to apply move: ${moveResult.error}`
+            }));
+            return;
         }
-
-        this.sendMessage(ws, {
-            type: 'game_joined',
-            gameId: ws.gameId,
-            message: 'Successfully joined game'
+        
+        // Broadcast player move to all clients
+        this.broadcastToRoom(gameId, {
+            type: 'move',
+            move: {
+                from: move.from,
+                to: move.to,
+                uci: uciMove,
+                san: moveResult.san || uciMove,
+                fen: moveResult.fen
+            },
+            timestamp: Date.now()
         });
-
-        console.log(`🎮 Player joined game ${ws.gameId}`);
-    }
-
-    async handleLegalMoves(ws, message) {
-        const { square, currentFen, gameId } = message;
         
-        try {
-            console.log(`🔒 Getting legal moves via security layer for square: ${square}`);
+        console.log(`✅ Player move applied: ${uciMove}`);
+        
+        // Check if game is against AI (you can add logic to determine this)
+        // For now, always trigger AI move after player move
+        setTimeout(() => {
+            this.triggerAIMove(gameId, moveResult.fen);
+        }, 500); // Small delay for better UX
+        
+    } catch (error) {
+        console.error('❌ Error handling player move:', error);
+        ws.send(JSON.stringify({
+            type: 'error',
+            message: 'Failed to process move'
+        }));
+    }
+}
+
+   async handleJoinGame(ws, message) {
+    const { gameId } = message;
+    
+    if (!gameId) {
+        this.sendError(ws, 'Game ID required');
+        return;
+    }
+    
+    // Set game ID for this connection
+    ws.gameId = gameId;
+    
+    // Set a demo user ID if not authenticated
+    if (!ws.userId) {
+        ws.userId = `guest_${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`🎮 Created guest user: ${ws.userId}`);
+    }
+    
+    // Add to game room
+    if (!this.gameRooms.has(gameId)) {
+        this.gameRooms.set(gameId, new Set());
+    }
+    this.gameRooms.get(gameId).add(ws);
+    
+    // **CRITICAL: Initialize game session in security layer**
+    try {
+        const initialFEN = 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1'; // Los Alamos starting position
+        
+        // Initialize the game session with the security validator
+        this.securityValidator.initGameSession(gameId, {
+            white: ws.userId,  // Assign player as white
+            black: 'ai_bot',   // AI opponent
+            startFEN: initialFEN,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log(`✅ Game session initialized: ${gameId} with player ${ws.userId}`);
+        
+    } catch (error) {
+        console.error('❌ Failed to initialize game session:', error);
+    }
+    
+    // Send confirmation
+    this.sendMessage(ws, {
+        type: 'game_joined',
+        gameId: gameId,
+        userId: ws.userId,
+        message: 'Successfully joined game',
+        gameState: {
+            fen: 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1',
+            currentTurn: 'white',
+            yourColor: 'white'
+        }
+    });
+    
+    console.log(`🎮 Player ${ws.userId} joined game: ${gameId}`);
+}
+
+/**
+ * Trigger AI bot move
+ * @param {string} gameId - Game ID
+ * @param {string} currentFen - Current board state in FEN
+ */
+async triggerAIMove(gameId, currentFEN) {
+    try {
+        console.log(`🤖 Triggering AI move for game: ${gameId}`);
+        
+        const AIBot = require('../backend/src/ai-bot/index');
+        const aiBot = new AIBot();
+        
+        const botRequest = {
+            fen: currentFEN,
+            level: 'L1',
+            msCap: 2000
+        };
+        
+        console.log(`🤖 Bot request:`, botRequest);
+        
+        const botResponse = await aiBot.generateMove(botRequest);
+        
+        if (!botResponse.ok) {
+            console.error('❌ AI Bot failed:', botResponse.error);
+            return;
+        }
+        
+        console.log(`🤖 AI generated move: ${botResponse.move}`);
+        
+        const uciMove = botResponse.move;
+        const from = uciMove.substring(0, 2);
+        const to = uciMove.substring(2, 4);
+        
+        // Validate the AI's move through security
+        const mockReq = {
+            body: {
+                gameId: gameId,
+                move: uciMove,
+                currentFEN: currentFEN
+            },
+            user: { id: 'ai_bot' }
+        };
+        
+        let aiMoveResult = null;
+        const mockRes = {
+            json: (data) => { aiMoveResult = data; },
+            status: (code) => ({ json: (data) => { aiMoveResult = { ...data, statusCode: code }; }})
+        };
+        
+        await this.securityValidator.validateMoveSecure(mockReq, mockRes);
+        
+        if (aiMoveResult && aiMoveResult.legal) {
+            // **CRITICAL: Update the game state in security validator**
+            this.securityValidator.gameStates.set(gameId, {
+                fen: aiMoveResult.newFEN,
+                activeColor: aiMoveResult.activeColor,
+                status: aiMoveResult.gameStatus,
+                moveCount: aiMoveResult.moveCount,
+                lastMove: uciMove,
+                timestamp: new Date().toISOString()
+            });
             
-            // Create mock request object for security validator
-            const mockReq = {
-                body: { 
-                    gameId: gameId || ws.gameId, 
-                    square, 
-                    currentFEN: currentFen 
+            console.log(`🎮 Game state updated: ${aiMoveResult.activeColor} to move`);
+            
+            // Broadcast AI move to all clients
+            this.broadcastToRoom(gameId, {
+                type: 'ai_move',
+                move: {
+                    from: from,
+                    to: to,
+                    uci: uciMove,
+                    fen: aiMoveResult.newFEN,
+                    activeColor: aiMoveResult.activeColor
                 },
-                user: { id: ws.userId || 'demo_user' }
-            };
+                evaluation: botResponse.eval,
+                timestamp: Date.now()
+            });
             
-            // Create mock response object to capture the result
-            let securityResult = null;
-            const mockRes = {
+            console.log(`✅ AI move executed: ${from} -> ${to}`);
+        } else {
+            console.error('❌ AI move validation failed');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in triggerAIMove:', error);
+    }
+}
+
+
+   async handleLegalMoves(ws, message) {
+    const { square, currentFen, gameId } = message;
+    
+    try {
+        console.log(`🔒 Getting legal moves via security layer for square: ${square}`);
+        
+        // Create mock request object for security validator
+        const mockReq = {
+            body: { 
+                gameId: gameId || ws.gameId, 
+                square, 
+                currentFEN: currentFen 
+            },
+            user: { id: ws.userId || 'demo_user' }
+        };
+        
+        // Create mock response object to capture the result
+        let securityResult = null;
+        const mockRes = {
+            json: (data) => { 
+                securityResult = data; 
+            },
+            status: (code) => ({ 
                 json: (data) => { 
-                    securityResult = data; 
-                },
-                status: (code) => ({ 
-                    json: (data) => { 
-                        securityResult = { ...data, statusCode: code }; 
-                    } 
-                })
-            };
+                    securityResult = { ...data, statusCode: code }; 
+                } 
+            })
+        };
+        
+        // Call security validator
+        await this.securityValidator.getLegalMovesSecure(mockReq, mockRes);
+        
+        if (securityResult && securityResult.success !== false) {
+            // **CRITICAL: Convert UCI format to destination squares**
+            const moves = securityResult.moves || [];
+            const convertedMoves = moves.map(move => {
+                // UCI format: "b2b3" -> destination: "b3"
+                if (move.length >= 4) {
+                    return move.substring(2, 4);
+                }
+                return move;
+            });
             
-            // Call security validator
-            await this.securityValidator.getLegalMovesSecure(mockReq, mockRes);
-            
-            if (securityResult && securityResult.success !== false) {
-                this.sendMessage(ws, {
-                    type: 'legal_moves',
-                    square: square,
-                    moves: securityResult.moves || [],
-                    engine: securityResult.engine || 'Security layer'
-                });
-                
-                console.log(`🔒 Legal moves via security: ${securityResult.moves?.length || 0} moves`);
-            } else {
-                throw new Error('Security validation failed');
-            }
-            
-        } catch (error) {
-            console.error('❌ Error getting legal moves via security:', error);
-            
-            // Fallback: send basic moves for testing
-            const basicMoves = {
-                'a2': ['a3'], 'b2': ['b3'], 'c2': ['c3', 'c4'], 
-                'd2': ['d3', 'd4'], 'e2': ['e3', 'e4'], 'f2': ['f3', 'f4'],
-                'b1': ['a3', 'c3'], 'e1': ['d3', 'f3']
-            };
+            console.log(`🔒 Legal moves via security: ${convertedMoves.length} moves -> ${JSON.stringify(convertedMoves)}`);
             
             this.sendMessage(ws, {
                 type: 'legal_moves',
                 square: square,
-                moves: basicMoves[square] || []
+                moves: convertedMoves,
+                engine: securityResult.engine || 'Security layer'
             });
+        } else {
+            throw new Error('Security validation failed');
         }
+        
+    } catch (error) {
+        console.error('❌ Error getting legal moves via security:', error);
+        
+        // Fallback: send basic moves for testing
+        const basicMoves = {
+            'a2': ['a3'], 'b2': ['b3'], 'c2': ['c3'], 
+            'd2': ['d3'], 'e2': ['e3'], 'f2': ['f3'],
+            'b1': ['a3', 'c3'], 'e1': ['d3', 'f3']
+        };
+        
+        this.sendMessage(ws, {
+            type: 'legal_moves',
+            square: square,
+            moves: basicMoves[square] || []
+        });
     }
+}
+
 
     async handleMove(ws, message) {
         const { move, gameId } = message;
@@ -341,29 +549,51 @@ class SecurityIntegratedWebSocketHandler {
             // Call security validator with move validation
             await this.securityValidator.validateMoveSecure(mockReq, mockRes);
             
-            if (securityResult && securityResult.legal) {
-                // Move is valid, broadcast to all players in the game
-                this.broadcastToRoom(gameId || ws.gameId, {
-                    type: 'move',
-                    move: move,
-                    valid: true,
-                    newFEN: securityResult.newFEN,
-                    flags: securityResult.flags || {}
-                }, ws);
+           if (securityResult && securityResult.legal) {
+    // **CRITICAL: Update game state**
+    this.securityValidator.gameStates.set(gameId || ws.gameId, {
+        fen: securityResult.newFEN,
+        activeColor: securityResult.activeColor,
+        status: securityResult.gameStatus,
+        moveCount: securityResult.moveCount,
+        lastMove: uci,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Move is valid, broadcast to all players in the game
+    this.broadcastToRoom(gameId || ws.gameId, {
+        type: 'move',
+        move: move,
+        valid: true,
+        newFEN: securityResult.newFEN,
+        activeColor: securityResult.activeColor,
+        flags: securityResult.flags || {}
+    }, ws);
 
-                console.log(`✅ Valid move via security layer: ${move.from}-${move.to}`);
-            } else {
-                const errorMsg = securityResult?.details || securityResult?.error || 'Move validation failed';
-                this.sendError(ws, errorMsg);
-                console.log(`❌ Invalid move via security layer: ${move.from}-${move.to} (${errorMsg})`);
-            }
-            
-        } catch (error) {
-            console.error('❌ Move validation error via security:', error);
-            this.sendError(ws, 'Move validation failed');
-        }
+    console.log(`✅ Valid move via security layer: ${move.from}-${move.to}`);
+    console.log(`🎮 Turn: ${securityResult.activeColor} to move`);
+    
+    // Trigger AI bot if it's now AI's turn
+    const activeColor = securityResult.activeColor;
+    if (activeColor === 'b' || activeColor === 'black') {
+        console.log('🤖 AI turn detected, triggering bot move...');
+        setTimeout(() => {
+            this.triggerAIMove(gameId || ws.gameId, securityResult.newFEN);
+        }, 800);
     }
 
+            
+        } else {
+            const errorMsg = securityResult?.details || securityResult?.error || 'Move validation failed';
+            this.sendError(ws, errorMsg);
+            console.log(`❌ Invalid move via security layer: ${move.from}-${move.to} (${errorMsg})`);
+        }
+        
+    } catch (error) {
+        console.error('❌ Move validation error via security:', error);
+        this.sendError(ws, 'Move validation failed');
+    }
+}
     async handleChat(ws, message) {
         const { text, gameId } = message;
         
