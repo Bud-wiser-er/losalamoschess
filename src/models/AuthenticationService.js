@@ -5,6 +5,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const EmailService = require('../services/EmailService');
 
 class AuthenticationService {
     constructor(databaseService, config = {}) {
@@ -22,6 +23,21 @@ class AuthenticationService {
         
         // Track failed login attempts
         this.loginAttempts = new Map();
+
+        // Initialize email service
+        this.emailService = new EmailService();
+        this._initializeEmailService();
+    }
+
+    /**
+     * Initialize email service
+     */
+    async _initializeEmailService() {
+        try {
+            await this.emailService.initialize();
+        } catch (error) {
+            console.log('⚠️  Email service initialization failed:', error.message);
+        }
     }
 
     /**
@@ -223,14 +239,14 @@ class AuthenticationService {
         }
     }
 
-    // Updated sendPasswordReset method to include code generation
+    // Send password reset email with OTP code
     async sendPasswordReset(email) {
         try {
             const user = await this.db.findUserByEmail(email);
             if (!user) {
                 // Don't reveal if email exists for security
-                return { 
-                    success: true, 
+                return {
+                    success: true,
                     message: 'If email exists, reset code sent'
                 };
             }
@@ -246,7 +262,7 @@ class AuthenticationService {
                 resetExpiry: resetExpiry
             });
 
-            // Store code temporarily (for demo - use email service in production)
+            // Store code temporarily (10 minutes for OTP code)
             this.resetCodes.set(email, {
                 code: resetCode,
                 token: resetToken,
@@ -260,13 +276,17 @@ class AuthenticationService {
                 timestamp: new Date()
             });
 
-            // TODO: Send email with resetCode in production
-            // emailService.sendPasswordResetCode(email, resetCode);
+            // Send email with reset code
+            try {
+                await this.emailService.sendPasswordResetCode(email, resetCode, user.username);
+                console.log(`✅ Password reset code sent to ${email}`);
+            } catch (emailError) {
+                console.error('Email sending failed, showing code in console:', emailError.message);
+                console.log(`🔑 Demo: Reset code for ${email}: ${resetCode}`);
+            }
 
-            console.log(`🔑 Demo: Reset code for ${email}: ${resetCode}`);
-
-            return { 
-                success: true, 
+            return {
+                success: true,
                 message: 'Reset code sent to your email',
                 resetToken // Remove in production - only for demo
             };
@@ -276,11 +296,12 @@ class AuthenticationService {
             throw error;
         }
     }
-_validateUsername(username) {
+
+    _validateUsername(username) {
         // Username rules: 3-20 chars, alphanumeric + underscore, no spaces
         const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
         return usernameRegex.test(username);
-}
+    }
     /**
      * Login user and issue JWT tokens
      * @param {string} email - User email
@@ -478,48 +499,6 @@ _validateUsername(username) {
         return this._signJWT(payload, this.config.jwtExpiresIn);
     }
 
-    /**
-     * Send password reset email (placeholder - integrate with email service)
-     * @param {string} email - User email
-     * @returns {Promise<Object>} - Success status
-     */
-    async sendPasswordReset(email) {
-        try {
-            const user = await this.db.findUserByEmail(email);
-            if (!user) {
-                // Don't reveal if email exists for security
-                return { success: true, message: 'If email exists, reset link sent' };
-            }
-
-            // Generate reset token
-            const resetToken = crypto.randomBytes(32).toString('hex');
-            const resetExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-            await this.db.updateUser(user.id, {
-                resetToken: resetToken,
-                resetExpiry: resetExpiry
-            });
-
-            await this.db.createAuditLog({
-                action: 'PASSWORD_RESET_REQUESTED',
-                userId: user.id,
-                metadata: { email },
-                timestamp: new Date()
-            });
-
-            // TODO: Integrate with email service to send reset link
-            // emailService.sendPasswordReset(email, resetToken);
-
-            return { 
-                success: true, 
-                message: 'If email exists, reset link sent',
-                resetToken // Remove in production - only for testing
-            };
-
-        } catch (error) {
-            throw error;
-        }
-    }
 
     /**
      * Authorize user for specific action/resource
