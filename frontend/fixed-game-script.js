@@ -143,13 +143,19 @@ function setupInitialPosition() {
  */
 function handleSquareClick(event) {
     if (!gameState.isGameActive) return;
-    
+
+    // Check if it's the player's turn FIRST - before any other logic
+    if (gameState.currentPlayer !== gameState.playerColor) {
+        console.log('Not your turn! Current player:', gameState.currentPlayer, 'Your color:', gameState.playerColor);
+        return;
+    }
+
     // Get the square element and its ID
     const square = event.currentTarget;
     const squareId = square.id;
-    
+
     console.log(`Square clicked: ${squareId}`);
-    
+
     const piece = square.querySelector('.piece');
     
     // If a square is already selected
@@ -846,8 +852,8 @@ function handleAIMove(move) {
         
         // Switch turn back to player
         switchTurn();
-        
-        console.log('✅ AI move executed successfully');
+
+        console.log('✅ AI move executed successfully - turn switched to player');
     }
 }
 

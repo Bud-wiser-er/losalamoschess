@@ -132,7 +132,7 @@ async getAIMoveSecure(req, res) {
             }
 
             // 1. SECURITY: Verify player authorization
-            const authResult = await this.verifyPlayerAuthorization(gameId, userId, move);
+            const authResult = await this.verifyPlayerAuthorization(gameId, userId, move, req);
             if (!authResult.authorized) {
                 return res.status(403).json({
                     legal: false,
@@ -326,10 +326,10 @@ async getAIMoveSecure(req, res) {
         });
     }
 }
- async verifyPlayerAuthorization(gameId, userId, move) {
-    // Allow AI bot to move
-    if (userId === 'ai_bot') {
-        console.log('🤖 AI bot authorized to move');
+ async verifyPlayerAuthorization(gameId, userId, move, req = null) {
+    // Allow AI bot to move (skip turn validation)
+    if (userId === 'ai_bot' || (req && req.user && req.user.isAI)) {
+        console.log('🤖 AI bot authorized to move (bypassing turn validation)');
         return { authorized: true, color: 'black' };
     }
     
@@ -365,9 +365,26 @@ async getAIMoveSecure(req, res) {
         };
     }
     
-    // Check if it's the user's turn
-    const activeColor = gameState?.activeColor === 'w' ? 'white' : 'black';
+    // Check if it's the user's turn - get activeColor from FEN to ensure consistency
+    const activeColor = this.getActiveColorFromFEN(gameState?.fen || 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1');
     if (activeColor !== userColor) {
+        console.log(`⚠️ Turn validation: activeColor=${activeColor}, userColor=${userColor}, userId=${userId}`);
+
+        // **FIXED: More helpful error messages**
+        if (userColor === 'white' && activeColor === 'black') {
+            return {
+                authorized: false,
+                reason: `Wait for AI to move (black's turn)`
+            };
+        }
+
+        if (userColor === 'black' && activeColor === 'white') {
+            return {
+                authorized: false,
+                reason: `Wait for your opponent to move (white's turn)`
+            };
+        }
+
         return {
             authorized: false,
             reason: `Not your turn (${activeColor} to move)`
@@ -705,7 +722,7 @@ initGameSession(gameId, sessionData) {
     const initialFEN = sessionData.startFEN || 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1';
     this.gameStates.set(gameId, {
         fen: initialFEN,
-        activeColor: 'w',
+        activeColor: 'white', // Use consistent color format
         status: 'active',
         moveCount: 0,
         lastMove: null,
