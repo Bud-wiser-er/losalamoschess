@@ -51,7 +51,7 @@
     {
       "id": "DB-10",
       "status": "PASS",
-      "message": "Performance test passed: 100 users created in 218ms"
+      "message": "Performance test passed: 100 users created in 217ms"
     },
     {
       "id": "DB-11",
@@ -79,6 +79,6 @@
       "message": "Data consistency maintained under concurrent load"
     }
   ],
-  "duration": 3096,
+  "duration": 3101,
   "coverage": 64
 }
