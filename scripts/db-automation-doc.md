@@ -1,8 +1,8 @@
-# Los Alamos Chess - Automation Scripts Guide
+# Los Alamos Chess - Database Automation Guide
 
-This document explains all the automation scripts available in the `/scripts` folder and how to use them effectively.
+This document provides comprehensive guidance for using the automation scripts available in the `/scripts` directory. These scripts streamline database setup, testing, and development workflows.
 
-##  File Structure
+## File Structure
 
 ```
 /scripts/
@@ -24,61 +24,61 @@ This document explains all the automation scripts available in the `/scripts` fo
     └── /database/seed.js         # Add test data
 ```
 
-##  Which Scripts Should You Use?
+## Script Selection Guide
 
-### **If you're using PowerShell (Windows 10/11 default):**
-- Use `.ps1` files (PowerShell scripts)
-- More reliable and better error handling
-- Native Windows integration
+### PowerShell Scripts (Recommended for Windows 10/11)
+- Use `.ps1` files for PowerShell environments
+- Enhanced error handling and reliability
+- Native Windows integration capabilities
 
-### **If you're using Command Prompt (cmd):**
-- Use `.cmd` files (Batch scripts)
-- Traditional Windows batch files
-- Works in older Windows environments
+### Batch Scripts (Command Prompt Compatibility)
+- Use `.cmd` files for traditional command prompt
+- Compatible with older Windows environments
+- Standard batch file functionality
 
-##  Quick Start Guide
+## Quick Start Guide
 
-### **New to the Project? Start Here:**
+### Initial Project Setup
 
-**1. First-time setup (PowerShell):**
+#### PowerShell Environment
 ```powershell
-# Navigate to project folder
+# Navigate to project directory
 cd C:\YourProject\scripts
 
-# Run quick setup
+# Execute initial setup
 .\quick-setup.ps1
 ```
 
-**2. First-time setup (Command Prompt):**
+#### Command Prompt Environment
 ```cmd
 cd C:\YourProject\scripts
 setup-project.cmd
 ```
 
-### **Daily Development:**
+### Daily Development Workflow
 
-**PowerShell:**
+#### PowerShell
 ```powershell
-# Just start coding
+# Standard development startup
 .\quick-setup.ps1
 
-# Or use npm directly
+# Alternative: Direct npm execution
 npm run dev
 ```
 
-**Command Prompt:**
+#### Command Prompt
 ```cmd
 dev-start.cmd
 ```
 
-##  Detailed Script Reference
+## Detailed Script Reference
 
-### **PowerShell Scripts (.ps1)**
+### PowerShell Scripts (.ps1)
 
-#### `quick-setup.ps1`  **RECOMMENDED FOR DAILY USE**
-**Purpose:** Simple, fast setup for daily development
-**When to use:** Every time you start working
-**What it does:**
+#### `quick-setup.ps1` (Recommended for Daily Use)
+**Purpose:** Streamlined setup for daily development activities
+**Use Case:** Standard development session initialization
+**Functionality:**
 - Checks Node.js and .env file
 - Installs dependencies if missing
 - Tests database connection
