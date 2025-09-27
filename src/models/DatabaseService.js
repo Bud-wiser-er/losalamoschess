@@ -70,7 +70,7 @@ class DatabaseService {
 
     async updateUser(id, userData) {
         // Update user data while preserving existing functionality
-        const { username, email, rating, isOnline, refreshToken, tokenExpiry, resetToken, resetExpiry } = userData;
+        const { username, email, passwordHash, rating, isOnline, refreshToken, tokenExpiry, resetToken, resetExpiry } = userData;
         
         // Build dynamic update query
         const fields = [];
@@ -84,6 +84,10 @@ class DatabaseService {
         if (email !== undefined) {
             fields.push(`email = $${paramCount++}`);
             values.push(email);
+        }
+        if (passwordHash !== undefined) {
+            fields.push(`password_hash = $${paramCount++}`);
+            values.push(passwordHash);
         }
         if (rating !== undefined) {
             fields.push(`rating = $${paramCount++}`);
