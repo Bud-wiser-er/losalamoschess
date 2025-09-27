@@ -68,6 +68,9 @@ function initializeGame() {
 /**
  * Create the 6x6 chess board HTML structure
  */
+/**
+ * Create the 6x6 chess board HTML structure
+ */
 function createChessBoard() {
     const boardElement = document.getElementById('board');
     if (!boardElement) return;
@@ -107,13 +110,14 @@ function createChessBoard() {
                 square.appendChild(fileLabel);
             }
             
-            // Add click handler
-            square.addEventListener('click', () => handleSquareClick(squareId));
+            // CORRECT EVENT LISTENER - pass the event, not squareId
+            square.addEventListener('click', handleSquareClick);
             
             boardElement.appendChild(square);
         }
     }
 }
+
 
 /**
  * Setup initial piece positions
@@ -135,12 +139,17 @@ function setupInitialPosition() {
 
 /**
  * Handle square click events
- * @param {string} squareId - Square identifier (e.g., 'e4')
+ * @param {Event} event - Click event
  */
-function handleSquareClick(squareId) {
+function handleSquareClick(event) {
     if (!gameState.isGameActive) return;
     
-    const square = document.getElementById(squareId);
+    // Get the square element and its ID
+    const square = event.currentTarget;
+    const squareId = square.id;
+    
+    console.log(`Square clicked: ${squareId}`);
+    
     const piece = square.querySelector('.piece');
     
     // If a square is already selected
@@ -153,6 +162,7 @@ function handleSquareClick(squareId) {
         
         // If clicking a valid move destination
         if (gameState.legalMoves.includes(squareId)) {
+            console.log(`Executing move: ${gameState.selectedSquare} → ${squareId}`);
             makeMove(gameState.selectedSquare, squareId);
             return;
         }
@@ -166,6 +176,7 @@ function handleSquareClick(squareId) {
         selectSquare(squareId);
     }
 }
+
 
 /**
  * Check if piece can be selected by current player
@@ -195,14 +206,21 @@ function selectSquare(squareId) {
     const square = document.getElementById(squareId);
     square.classList.add('selected');
     
-    // Get legal moves using Byron's engine
+    console.log(`Selected square: ${squareId}`);
+    
+    // Get legal moves using server/engine
     calculateLegalMoves(squareId);
 }
 
+
+/**
+ * Calculate legal moves for selected piece
+ * @param {string} squareId - Selected square
+ */
 function calculateLegalMoves(squareId) {
     gameState.legalMoves = [];
     
-    console.log('Requesting legal moves for:', squareId); // Debug
+    console.log('Requesting legal moves for:', squareId);
     
     if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
         const message = {
@@ -212,7 +230,7 @@ function calculateLegalMoves(squareId) {
             currentFen: generateCurrentFEN()
         };
         
-        console.log('Sending WebSocket message:', message); // Debug
+        console.log('Sending WebSocket message:', message);
         gameSocket.send(JSON.stringify(message));
     } else {
         console.warn('WebSocket not available - using fallback move calculation');
@@ -220,7 +238,6 @@ function calculateLegalMoves(squareId) {
         highlightLegalMoves();
     }
 }
-
 /**
  * Fallback: Basic legal move calculation
  * @param {string} squareId - Selected square
@@ -341,32 +358,22 @@ function isSameColor(piece1, piece2) {
 }
 
 /**
- * Highlight legal move squares
+ * Highlight legal moves on the board
  */
 function highlightLegalMoves() {
-    console.log('Highlighting moves:', gameState.legalMoves); // Debug
+    // Clear existing highlights
+    document.querySelectorAll('.valid-move, .capture-move').forEach(sq => {
+        sq.classList.remove('valid-move', 'capture-move');
+    });
     
-    gameState.legalMoves.forEach(move => {
-        let targetSquare;
-        
-        // Handle different move formats
-        if (move.length === 4) {
-            // UCI format like "c2c3" - extract destination
-            targetSquare = move.substring(2, 4);
-        } else if (move.length === 2) {
-            // Already just the destination square like "c3"
-            targetSquare = move;
-        } else {
-            console.warn('Unknown move format:', move);
-            return;
-        }
-        
-        console.log('Looking for square:', targetSquare); // Debug
-        
+    console.log('Highlighting moves:', gameState.legalMoves);
+    
+    gameState.legalMoves.forEach(targetSquare => {
+        console.log('Looking for square:', targetSquare);
         const square = document.getElementById(targetSquare);
+        
         if (square) {
-            const targetPiece = gameState.board[targetSquare];
-            
+            const targetPiece = square.querySelector('.piece');
             if (targetPiece) {
                 square.classList.add('capture-move');
                 console.log('Added capture highlight to:', targetSquare);
@@ -379,7 +386,6 @@ function highlightLegalMoves() {
         }
     });
 }
-
 /**
  * Clear all selections and highlights
  */
@@ -756,23 +762,92 @@ function initializeWebSocket() {
  */
 function handleWebSocketMessage(data) {
     switch (data.type) {
+        case 'game_joined':
+            console.log('Successfully joined game:', data);
+            // Handle game join confirmation
+            if (data.gameState) {
+                // Update game state if provided
+                gameState.gameId = data.gameId;
+            }
+            break;
+            
         case 'legal_moves':
             handleLegalMovesResponse(data);
             break;
+            
         case 'move':
             handleOpponentMove(data.move);
             break;
+            
+        case 'ai_move':
+            console.log('🤖 AI move received:', data.move);
+            handleAIMove(data.move);
+            break;
+            
         case 'chat':
             handleChatMessage(data.message);
             break;
+            
         case 'connected':
             console.log('Connected to game server');
             break;
+            
         case 'error':
             console.error('Server error:', data.message);
+            alert(`Error: ${data.message}`);
             break;
+            
         default:
             console.log('Unknown message type:', data.type);
+    }
+}
+
+/**
+ * Handle AI move from server
+ * @param {Object} move - AI move data
+ */
+function handleAIMove(move) {
+    if (!move || !move.from || !move.to) return;
+    
+    console.log(`🤖 Executing AI move: ${move.from} → ${move.to}`);
+    
+    const fromSquare = document.getElementById(move.from);
+    const toSquare = document.getElementById(move.to);
+    
+    if (!fromSquare || !toSquare) {
+        console.error('Invalid squares for AI move');
+        return;
+    }
+    
+    const piece = fromSquare.querySelector('.piece');
+    
+    if (piece) {
+        // Remove piece from source
+        fromSquare.removeChild(piece);
+        
+        // Remove captured piece if any
+        const capturedPiece = toSquare.querySelector('.piece');
+        if (capturedPiece) {
+            toSquare.removeChild(capturedPiece);
+        }
+        
+        // Place piece on destination
+        toSquare.appendChild(piece);
+        
+        // Update game state
+        gameState.board[move.to] = gameState.board[move.from];
+        gameState.board[move.from] = '';
+        
+        // Update visual highlights
+        updateLastMoveHighlight(move.from, move.to);
+        
+        // Add to move history
+        addMoveToHistory(move.from, move.to, gameState.board[move.to], !!capturedPiece);
+        
+        // Switch turn back to player
+        switchTurn();
+        
+        console.log('✅ AI move executed successfully');
     }
 }
 
@@ -781,7 +856,7 @@ function handleWebSocketMessage(data) {
  * @param {Object} data - Legal moves data
  */
 function handleLegalMovesResponse(data) {
-    console.log('Received legal moves:', data.moves); // Debug log
+    console.log('Received legal moves:', data.moves);
     gameState.legalMoves = data.moves || [];
     highlightLegalMoves();
     console.log(`Highlighting ${gameState.legalMoves.length} legal moves for ${data.square}`);
