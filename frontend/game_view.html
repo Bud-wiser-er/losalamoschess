@@ -442,6 +442,67 @@
                 font-size: 36px;
             }
         }
+
+        /* Confirmation modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        .modal {
+            background: #1a1a1a;
+            padding: 25px;
+            border-radius: 12px;
+            width: 320px;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+            animation: fadeInUp 0.25s ease;
+        }
+        .modal h2 {
+            color: white;
+            margin-bottom: 10px;
+        }
+        .modal p {
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+        }
+        .modal-btn {
+            flex: 1;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .modal-btn.cancel {
+            background: #333;
+            color: white;
+        }
+        .modal-btn.cancel:hover {
+            background: #444;
+        }
+        .modal-btn.confirm {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+        .modal-btn.confirm:hover {
+            transform: scale(1.05);
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
@@ -549,6 +610,19 @@
                 </div>
             </div>
         </div>
+
+        <!-- Confirmation modal -->
+        <div id="modalOverlay" class="modal-overlay" style="display:none;">
+            <div class="modal">
+                <h2 id="modalTitle">Title</h2>
+                <p id="modalMessage">Message</p>
+                <div class="modal-buttons">
+                    <button class="modal-btn confirm" id="modalConfirm">Yes</button>
+                    <button class="modal-btn cancel" id="modalCancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Load the fixed game script -->

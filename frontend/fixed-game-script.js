@@ -10,6 +10,31 @@
  * File Location: /frontend/fixed-game-script.js
  */
 
+// Confirmation Modal
+let modalCallback = null;
+const modalOverlay = document.getElementById("modalOverlay");
+const modalTitle = document.getElementById("modalTitle");
+const modalMessage = document.getElementById("modalMessage");
+const modalConfirm = document.getElementById("modalConfirm");
+const modalCancel = document.getElementById("modalCancel");
+
+function showModal(title, message, callback) {
+    modalTitle.innerText = title;
+    modalMessage.innerText = message;
+    modalOverlay.style.display = "flex";
+    modalCallback = callback;
+}
+
+function closeModal(confirmed) {
+    modalOverlay.style.display = "none";
+    if (modalCallback) modalCallback(confirmed);
+}
+
+// Button handlers
+modalConfirm.addEventListener("click", () => closeModal(true));
+modalCancel.addEventListener("click", () => closeModal(false));
+
+
 // Game state management
 let gameState = {
     board: null,
@@ -1114,58 +1139,69 @@ function getAllLegalMovesForColor(color) {
 
 // Global functions for HTML onclick handlers
 window.goBack = function() {
-    if (confirm('Are you sure you want to leave the game?')) {
-        window.location.href = 'dashboard_page.html';
-    }
+    showModal("Leave Game?", "Are you sure you want to return to the lobby?", (ok) => {
+        if (ok) {
+            alert('You have left the game. Game over.');
+            window.location.href = "dashboard_page.html";
+        }
+    });
 };
 
 window.offerDraw = function() {
-    if (confirm('Are you sure you want to offer a draw?')) {
-        alert('Draw offer sent to opponent');
-    }
+    showModal("Offer Draw?", "Are you sure you want to offer a draw?", (ok) => {
+        if (ok) {
+            alert('You have offered a draw. Game over.');
+            window.location.href = "dashboard_page.html";
+        }
+    });
 };
 
 window.resign = function() {
-    if (confirm('Are you sure you want to resign?')) {
-        gameState.isGameActive = false;
-        alert('You have resigned. Game over.');
-        
-        const gameStatusElement = document.getElementById('game-status');
-        if (gameStatusElement) {
-            gameStatusElement.textContent = 'Game ended - Resigned';
+    showModal("Resign?", "Are you sure you want to resign?", (ok) => {
+        if (ok) {
+            alert('You have resigned. Game over.');
+
+            const gameStatusElement = document.getElementById('game-status');
+            if (gameStatusElement) {
+                gameStatusElement.textContent = 'Game ended - Resigned';
+            }
+
+            window.location.href = "dashboard_page.html";
         }
-    }
+    });
 };
 
 window.newGame = function() {
-    if (confirm('Start a new game?')) {
-        gameState.board = { ...INITIAL_POSITION };
-        gameState.currentPlayer = 'white';
-        gameState.timeLeft = { white: 900000, black: 900000 };
-        gameState.moveHistory = [];
-        gameState.isGameActive = true;
-        
-        setupInitialPosition();
-        clearSelection();
-        
-        const movesList = document.getElementById('moves-list');
-        movesList.innerHTML = '<div class="no-moves"><span>No moves yet</span></div>';
-        
-        initializeTimers();
-        updateMoveCount();
-        
-        const currentTurnElement = document.getElementById('current-turn');
-        if (currentTurnElement) {
-            currentTurnElement.textContent = 'White';
+    showModal("New Game?", "Are you sure you want to start a new game?", (ok) => {
+        if (ok) {
+            gameState.board = { ...INITIAL_POSITION };
+            gameState.currentPlayer = 'white';
+            gameState.timeLeft = { white: 900000, black: 900000 };
+            gameState.moveHistory = [];
+            gameState.isGameActive = true;
+            
+            setupInitialPosition();
+            clearSelection();
+            
+            const movesList = document.getElementById('moves-list');
+            movesList.innerHTML = '<div class="no-moves"><span>No moves yet</span></div>';
+            
+            initializeTimers();
+            updateMoveCount();
+            
+            const currentTurnElement = document.getElementById('current-turn');
+            if (currentTurnElement) {
+                currentTurnElement.textContent = 'White';
+            }
+            
+            const gameStatusElement = document.getElementById('game-status');
+            if (gameStatusElement) {
+                gameStatusElement.textContent = 'Active';
+            }
+            
+            console.log('New game started');
         }
-        
-        const gameStatusElement = document.getElementById('game-status');
-        if (gameStatusElement) {
-            gameStatusElement.textContent = 'Active';
-        }
-        
-        console.log('New game started');
-    }
+    });
 };
 
 /**
