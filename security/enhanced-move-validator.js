@@ -34,7 +34,84 @@ class SecurityMoveValidator {
             this.rulesEngine = null;
         }
     }
+/**
+ * Get AI move using Byron's engine
+ */
+async getAIMoveSecure(req, res) {
+    try {
+        const { gameId, currentFEN, level = 'L1' } = req.body;
+        const userId = req.user?.id;
+        
+        console.log('🤖 SecurityMoveValidator: Getting AI move from Byron\'s engine');
+        
+        if (!gameId) {
+            return res.status(400).json({
+                success: false,
+                error: 'MISSING_DATA',
+                details: 'Game ID required'
+            });
+        }
 
+        // Get current position
+        const position = currentFEN || this.getCurrentFEN(gameId);
+        console.log(`🎯 AI analyzing position: ${position}`);
+        
+        if (this.engineAvailable && this.rulesEngine) {
+            // Try getBestMove first
+            if (this.rulesEngine.getBestMove) {
+                const aiMove = this.rulesEngine.getBestMove(position, { 
+                    level: level, 
+                    msCap: 1000 
+                });
+                
+                if (aiMove && aiMove.uci) {
+                    console.log(`🤖 Byron's engine selected: ${aiMove.uci}`);
+                    return res.json({
+                        success: true,
+                        move: aiMove.uci,
+                        from: aiMove.uci.substring(0, 2),
+                        to: aiMove.uci.substring(2, 4),
+                        engine: 'Byron\'s Rules Engine',
+                        level: level,
+                        thinkTime: aiMove.thinkTime || 1000
+                    });
+                }
+            }
+            
+            // Fallback: get all legal moves and pick one
+            if (this.rulesEngine.getLegalMoves) {
+                const legalMoves = this.rulesEngine.getLegalMoves(position);
+                if (legalMoves && legalMoves.length > 0) {
+                    const randomMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
+                    console.log(`🤖 Byron's engine picked random move: ${randomMove}`);
+                    
+                    return res.json({
+                        success: true,
+                        move: randomMove,
+                        from: randomMove.substring(0, 2),
+                        to: randomMove.substring(2, 4),
+                        engine: 'Byron\'s Rules Engine (random)',
+                        availableMoves: legalMoves.length
+                    });
+                }
+            }
+        }
+        
+        return res.status(500).json({
+            success: false,
+            error: 'NO_AI_MOVE',
+            details: 'Byron\'s engine could not generate AI move'
+        });
+        
+    } catch (error) {
+        console.error('❌ AI move generation failed:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'AI_MOVE_ERROR',
+            details: error.message
+        });
+    }
+}
     /**
      * Validate move with full security and Byron's rules engine integration
      */
@@ -191,141 +268,117 @@ class SecurityMoveValidator {
         }
     }
 
-    /**
-     * Get legal moves using Byron's engine
-     */
     async getLegalMovesSecure(req, res) {
-        try {
-            const { gameId, square } = req.body;
-            const userId = req.user?.id;
-            
-            if (!gameId || !userId) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'MISSING_DATA',
-                    details: 'Game ID and authentication required'
-                });
-            }
-
-            // Security check
-            const authResult = await this.verifyPlayerAuthorization(gameId, userId, null);
-            if (!authResult.authorized) {
-                return res.status(403).json({
-                    success: false,
-                    error: 'UNAUTHORIZED',
-                    details: authResult.reason
-                });
-            }
-
-            // Get current position
-            const currentFEN = this.getCurrentFEN(gameId);
-            
-            let moves = [];
-            let totalLegalMoves = 0;
-            
-            if (this.engineAvailable && this.rulesEngine) {
-                // Get all legal moves from Byron's engine
-                const allLegalMoves = this.rulesEngine.getLegalMoves(currentFEN);
-                totalLegalMoves = allLegalMoves.length;
-                
-                // Filter by square if provided
-                if (square) {
-                    moves = allLegalMoves.filter(move => move.startsWith(square));
-                } else {
-                    moves = allLegalMoves;
-                }
-            } else {
-                // Fallback: Basic move generation
-                moves = this.generateBasicLegalMoves(currentFEN, square);
-                totalLegalMoves = moves.length;
-            }
-
-            return res.json({
-                success: true,
-                gameId: gameId,
-                square: square || 'all',
-                moves: moves,
-                totalLegalMoves: totalLegalMoves,
-                engine: this.engineAvailable ? 'Byron\'s engine' : 'Basic validation',
-                message: `Legal moves calculated${this.engineAvailable ? ' with Byron\'s engine' : ' with basic validation'}`
-            });
-
-        } catch (error) {
-            console.error('❌ Legal moves calculation failed:', error);
-            return res.status(500).json({
+    try {
+        const { gameId, square } = req.body;
+        const userId = req.user?.id;
+        
+        if (!gameId || !userId) {
+            return res.status(400).json({
                 success: false,
-                error: 'CALCULATION_ERROR',
-                details: 'Failed to calculate legal moves'
+                error: 'MISSING_DATA',
+                details: 'Game ID and authentication required'
             });
         }
-    }
 
-    /**
-     * Verify player is authorized to make this move
-     */
-    async verifyPlayerAuthorization(gameId, userId, move) {
-        try {
-            // Get game session
-            const session = this.playerSessions.get(gameId);
-            if (!session) {
-                return {
-                    authorized: false,
-                    reason: 'Game session not found'
-                };
+        // **REMOVED: Don't check authorization for viewing legal moves**
+        // Users should be able to see what moves are possible even if not their turn
+
+        // Get current position
+        const currentFEN = this.getCurrentFEN(gameId);
+        
+        let moves = [];
+        let totalLegalMoves = 0;
+        
+        if (this.engineAvailable && this.rulesEngine) {
+            // Get all legal moves from Byron's engine
+            const allLegalMoves = this.rulesEngine.getLegalMoves(currentFEN);
+            totalLegalMoves = allLegalMoves.length;
+            
+            // Filter by square if provided
+            if (square) {
+                moves = allLegalMoves.filter(move => move.startsWith(square));
+            } else {
+                moves = allLegalMoves;
             }
-
-            // Get current game state
-            const gameState = this.gameStates.get(gameId);
-            if (!gameState) {
-                return {
-                    authorized: false,
-                    reason: 'Game state not found'
-                };
-            }
-
-            // Check if it's player's turn
-            const currentTurn = this.getActiveColorFromFEN(gameState.fen);
-            const isWhiteTurn = currentTurn === 'white';
-            const isPlayerTurn = (isWhiteTurn && session.white === userId) || 
-                               (!isWhiteTurn && session.black === userId);
-
-            if (!isPlayerTurn) {
-                return {
-                    authorized: false,
-                    reason: `Not your turn (current: ${currentTurn})`
-                };
-            }
-
-            // If move is provided, verify the piece being moved belongs to the player
-            if (move && move.length >= 4) {
-                const fromSquare = move.substring(0, 2);
-                const piece = this.getPieceAtSquare(gameState.fen, fromSquare);
-                
-                if (!piece) {
-                    return {
-                        authorized: false,
-                        reason: 'No piece at source square'
-                    };
-                }
-
-                if (piece.color !== currentTurn) {
-                    return {
-                        authorized: false,
-                        reason: 'Cannot move opponent\'s pieces'
-                    };
-                }
-            }
-
-            return { authorized: true };
-
-        } catch (error) {
-            console.error('❌ Authorization check failed:', error);
-            return {
-                authorized: false,
-                reason: 'Authorization check error'
-            };
+        } else {
+            // Fallback: Basic move generation
+            moves = this.generateBasicLegalMoves(currentFEN, square);
+            totalLegalMoves = moves.length;
         }
+
+        return res.json({
+            success: true,
+            gameId: gameId,
+            square: square || 'all',
+            moves: moves,
+            totalLegalMoves: totalLegalMoves,
+            engine: this.engineAvailable ? 'Byron\'s engine' : 'Basic validation',
+            message: `Legal moves calculated${this.engineAvailable ? ' with Byron\'s engine' : ''}`
+        });
+        
+    } catch (error) {
+        console.error('❌ Legal moves calculation error:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'CALCULATION_ERROR',
+            details: error.message
+        });
     }
+}
+ async verifyPlayerAuthorization(gameId, userId, move) {
+    // Allow AI bot to move
+    if (userId === 'ai_bot') {
+        console.log('🤖 AI bot authorized to move');
+        return { authorized: true, color: 'black' };
+    }
+    
+    // Check if game session exists
+    if (!this.playerSessions.has(gameId)) {
+        console.warn(`⚠️ No session found for game: ${gameId}`);
+        return {
+            authorized: false,
+            reason: 'Game session not found - please rejoin the game'
+        };
+    }
+    
+    const session = this.playerSessions.get(gameId);
+    const gameState = this.gameStates.get(gameId);
+    
+    // Allow guest users (those starting with 'guest_')
+    const isGuest = userId.startsWith('guest_');
+    
+    // Determine which color the user is playing
+    const userColor = session.white === userId ? 'white' : 
+                      session.black === userId ? 'black' : null;
+    
+    // For guests, auto-assign to white if not already assigned
+    if (isGuest && !userColor && session.white.startsWith('guest_')) {
+        console.log(`🎮 Guest ${userId} authorized as white player`);
+        return { authorized: true, color: 'white' };
+    }
+    
+    if (!userColor) {
+        return {
+            authorized: false,
+            reason: 'You are not a player in this game'
+        };
+    }
+    
+    // Check if it's the user's turn
+    const activeColor = gameState?.activeColor === 'w' ? 'white' : 'black';
+    if (activeColor !== userColor) {
+        return {
+            authorized: false,
+            reason: `Not your turn (${activeColor} to move)`
+        };
+    }
+    
+    return {
+        authorized: true,
+        color: userColor
+    };
+}
 
     /**
      * Update game state with Byron's engine result
@@ -593,12 +646,17 @@ class SecurityMoveValidator {
     }
 
     /**
-     * Get current FEN for game
-     */
-    getCurrentFEN(gameId) {
-        const gameState = this.gameStates.get(gameId);
-        return gameState ? gameState.fen : 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1';
+ * Get current FEN for a game
+ */
+getCurrentFEN(gameId) {
+    if (this.gameStates.has(gameId)) {
+        return this.gameStates.get(gameId).fen;
     }
+    
+    // Return initial Los Alamos position as fallback
+    console.warn(`⚠️ No FEN found for game ${gameId}, using initial position`);
+    return 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1';
+}
 
     /**
      * Security: Log move for audit trail
@@ -630,35 +688,36 @@ class SecurityMoveValidator {
         }
     }
 
-    /**
-     * Initialize game session
-     */
-    initGameSession(gameId, whitePlayer, blackPlayer) {
-        try {
-            this.playerSessions.set(gameId, {
-                white: whitePlayer,
-                black: blackPlayer
-            });
-            
-            // Use standard Los Alamos starting position
-            const startingFEN = 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1';
-            
-            this.gameStates.set(gameId, {
-                fen: startingFEN,
-                status: 'active',
-                activeColor: 'white',
-                moveCount: 1,
-                flags: {},
-                timestamp: new Date().toISOString()
-            });
-            
-            console.log(`🎮 Game session initialized: ${gameId}`);
-            console.log(`📋 Starting position: ${startingFEN}`);
-            
-        } catch (error) {
-            console.error('❌ Game session initialization failed:', error);
-        }
-    }
+   /**
+ * Initialize a new game session
+ */
+initGameSession(gameId, sessionData) {
+    console.log(`🎮 Initializing game session: ${gameId}`);
+    
+    // Store player session data
+    this.playerSessions.set(gameId, {
+        white: sessionData.white,
+        black: sessionData.black || 'ai_bot',
+        created: sessionData.timestamp || new Date().toISOString()
+    });
+    
+    // Initialize game state
+    const initialFEN = sessionData.startFEN || 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1';
+    this.gameStates.set(gameId, {
+        fen: initialFEN,
+        activeColor: 'w',
+        status: 'active',
+        moveCount: 0,
+        lastMove: null,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Initialize move history
+    this.moveHistory.set(gameId, []);
+    
+    console.log(`✅ Game session initialized for: ${gameId}`);
+    return true;
+}
 
     /**
      * Get game session info
