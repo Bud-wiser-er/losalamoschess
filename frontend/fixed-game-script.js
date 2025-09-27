@@ -201,12 +201,23 @@ function handleSquareClick(event) {
         if (gameState.legalMoves.includes(squareId)) {
             console.log(`Executing move: ${gameState.selectedSquare} → ${squareId}`);
 
-            // Execute move locally first for immediate feedback
-            const move = { from: gameState.selectedSquare, to: squareId };
-            executeConfirmedMove(move);
+            // Check if this is a pawn promotion move
+            const piece = gameState.board[gameState.selectedSquare];
+            const isPawn = piece && (piece === '♙' || piece === '♟');
+            const toRank = parseInt(squareId[1]);
+            const isPromotion = isPawn && ((piece === '♙' && toRank === 6) || (piece === '♟' && toRank === 1));
 
-            // Then send to server for validation
-            sendMoveToServer(gameState.selectedSquare, squareId);
+            if (isPromotion) {
+                // Show professional promotion dialog first
+                showProfessionalPromotionDialog(gameState.selectedSquare, squareId, piece === '♙' ? 'white' : 'black');
+            } else {
+                // Execute normal move locally first for immediate feedback
+                const move = { from: gameState.selectedSquare, to: squareId };
+                executeConfirmedMove(move);
+
+                // Then send to server for validation
+                sendMoveToServer(gameState.selectedSquare, squareId);
+            }
             clearSelection();
             return;
         }
@@ -975,6 +986,11 @@ function handleGameEnded(data) {
  */
 function handleLegalMovesResponse(data) {
     console.log('Received legal moves:', data.moves);
+    console.log(`🔍 Server returned ${data.moves.length} legal moves for square ${data.square}`);
+    if (data.square === 'b6' && data.moves.length === 0) {
+        console.log('❌ PROMOTION BUG: Server thinks promoted queen at b6 has no legal moves!');
+        console.log('🔍 Local board state at b6:', gameState.board.b6);
+    }
     gameState.legalMoves = data.moves || [];
     highlightLegalMoves();
     console.log(`Highlighting ${gameState.legalMoves.length} legal moves for ${data.square}`);
@@ -1014,7 +1030,18 @@ function executeConfirmedMove(move) {
 
         toSquare.appendChild(piece);
 
-        gameState.board[move.to] = gameState.board[move.from];
+        // Update board state - use promoted piece if promotion occurred
+        if (move.promotion) {
+            const promotionPieces = {
+                white: { q: '♕', r: '♖', n: '♘' },
+                black: { q: '♛', r: '♜', n: '♞' }
+            };
+            const pieceColor = gameState.board[move.from] === '♙' ? 'white' : 'black';
+            gameState.board[move.to] = promotionPieces[pieceColor][move.promotion];
+            console.log(`🔄 Updated board state: promoted piece at ${move.to} is now ${gameState.board[move.to]}`);
+        } else {
+            gameState.board[move.to] = gameState.board[move.from];
+        }
         gameState.board[move.from] = '';
 
         updateLastMoveHighlight(move.from, move.to);
@@ -1055,23 +1082,13 @@ function sendMoveToServer(from, to) {
         const toRank = parseInt(to[1]);
         const isPromotion = isPawn && ((piece === '♙' && toRank === 6) || (piece === '♟' && toRank === 1));
 
-        if (isPromotion) {
-            // Auto-promote to queen
-            gameSocket.send(JSON.stringify({
-                type: 'move',
-                gameId: gameState.gameId,
-                move: { from, to, promotion: 'q' },
-                timestamp: Date.now()
-            }));
-        } else {
-            // Send normal move
-            gameSocket.send(JSON.stringify({
-                type: 'move',
-                gameId: gameState.gameId,
-                move: { from, to },
-                timestamp: Date.now()
-            }));
-        }
+        // Send normal move (promotion will be handled by the dialog)
+        gameSocket.send(JSON.stringify({
+            type: 'move',
+            gameId: gameState.gameId,
+            move: { from, to },
+            timestamp: Date.now()
+        }));
     }
 }
 
@@ -1186,6 +1203,289 @@ window.newGame = function() {
         }
     });
 };
+
+/**
+ * Show professional promotion dialog matching game's design
+ * @param {string} from - Source square
+ * @param {string} to - Destination square
+ * @param {string} color - Pawn color ('white' or 'black')
+ */
+function showProfessionalPromotionDialog(from, to, color) {
+    // Piece options for Los Alamos Chess (no bishops)
+    const promotionPieces = {
+        white: {
+            q: { symbol: '♕', name: 'Queen' },
+            r: { symbol: '♖', name: 'Rook' },
+            n: { symbol: '♘', name: 'Knight' }
+        },
+        black: {
+            q: { symbol: '♛', name: 'Queen' },
+            r: { symbol: '♜', name: 'Rook' },
+            n: { symbol: '♞', name: 'Knight' }
+        }
+    };
+
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.id = 'promotion-backdrop';
+    backdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(8px);
+        z-index: 9998;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        animation: fadeIn 0.3s ease-out;
+    `;
+
+    // Create dialog container
+    const dialog = document.createElement('div');
+    dialog.id = 'promotion-dialog';
+    dialog.style.cssText = `
+        background: #1a1a1a;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        z-index: 9999;
+        text-align: center;
+        min-width: 400px;
+        border: 1px solid #333;
+        animation: slideIn 0.3s ease-out;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    `;
+
+    // Create title
+    const title = document.createElement('h3');
+    title.textContent = 'Choose Promotion Piece';
+    title.style.cssText = `
+        color: #fff;
+        margin: 0 0 20px 0;
+        font-size: 22px;
+        font-weight: 600;
+    `;
+
+    // Create subtitle
+    const subtitle = document.createElement('p');
+    subtitle.textContent = `Promoting ${color} pawn from ${from} to ${to}`;
+    subtitle.style.cssText = `
+        color: #999;
+        margin: 0 0 30px 0;
+        font-size: 14px;
+    `;
+
+    // Create pieces container
+    const piecesContainer = document.createElement('div');
+    piecesContainer.style.cssText = `
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin-bottom: 25px;
+    `;
+
+    // Create piece buttons
+    Object.entries(promotionPieces[color]).forEach(([piece, data]) => {
+        const pieceButton = document.createElement('button');
+        pieceButton.className = 'promotion-piece-btn';
+        pieceButton.dataset.piece = piece;
+
+        pieceButton.innerHTML = `
+            <div class="piece-symbol">${data.symbol}</div>
+            <div class="piece-name">${data.name}</div>
+        `;
+
+        pieceButton.style.cssText = `
+            background: #2c3e50;
+            border: 2px solid #444;
+            border-radius: 12px;
+            padding: 20px 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 100px;
+            color: white;
+            font-family: inherit;
+            position: relative;
+            overflow: hidden;
+        `;
+
+        // Add piece symbol styling
+        const pieceSymbol = pieceButton.querySelector('.piece-symbol');
+        pieceSymbol.style.cssText = `
+            font-size: 40px;
+            margin-bottom: 8px;
+            display: block;
+            transition: transform 0.3s ease;
+        `;
+
+        // Add piece name styling
+        const pieceName = pieceButton.querySelector('.piece-name');
+        pieceName.style.cssText = `
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #999;
+        `;
+
+        // Add hover effects
+        pieceButton.addEventListener('mouseenter', () => {
+            pieceButton.style.background = '#10b981';
+            pieceButton.style.borderColor = '#10b981';
+            pieceButton.style.transform = 'translateY(-2px)';
+            pieceButton.style.boxShadow = '0 8px 16px rgba(16, 185, 129, 0.3)';
+            pieceSymbol.style.transform = 'scale(1.1)';
+            pieceName.style.color = 'white';
+        });
+
+        pieceButton.addEventListener('mouseleave', () => {
+            pieceButton.style.background = '#2c3e50';
+            pieceButton.style.borderColor = '#444';
+            pieceButton.style.transform = 'translateY(0)';
+            pieceButton.style.boxShadow = 'none';
+            pieceSymbol.style.transform = 'scale(1)';
+            pieceName.style.color = '#999';
+        });
+
+        // Handle selection
+        pieceButton.addEventListener('click', () => {
+            selectPromotionPiece(from, to, piece);
+            closePromotionDialog();
+        });
+
+        piecesContainer.appendChild(pieceButton);
+    });
+
+    // Create cancel button
+    const cancelButton = document.createElement('button');
+    cancelButton.textContent = 'Cancel Move';
+    cancelButton.style.cssText = `
+        background: transparent;
+        border: 1px solid #555;
+        color: #999;
+        padding: 12px 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        width: 100%;
+    `;
+
+    cancelButton.addEventListener('mouseenter', () => {
+        cancelButton.style.background = '#555';
+        cancelButton.style.color = 'white';
+    });
+
+    cancelButton.addEventListener('mouseleave', () => {
+        cancelButton.style.background = 'transparent';
+        cancelButton.style.color = '#999';
+    });
+
+    cancelButton.addEventListener('click', () => {
+        closePromotionDialog();
+        console.log('🚫 Promotion cancelled');
+    });
+
+    // Assemble dialog
+    dialog.appendChild(title);
+    dialog.appendChild(subtitle);
+    dialog.appendChild(piecesContainer);
+    dialog.appendChild(cancelButton);
+    backdrop.appendChild(dialog);
+
+    // Add CSS animations
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Add to page
+    document.body.appendChild(backdrop);
+
+    // Focus trap and keyboard handling
+    backdrop.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closePromotionDialog();
+        }
+    });
+
+    backdrop.focus();
+    backdrop.tabIndex = -1;
+
+    console.log(`👑 Professional promotion dialog shown for ${color} pawn: ${from} → ${to}`);
+}
+
+/**
+ * Handle promotion piece selection
+ * @param {string} from - Source square
+ * @param {string} to - Destination square
+ * @param {string} promotion - Selected promotion piece ('q', 'r', 'n')
+ */
+function selectPromotionPiece(from, to, promotion) {
+    console.log(`👑 Promotion selected: ${from} → ${to} = ${promotion}`);
+
+    // Execute move locally with promotion
+    const move = { from, to, promotion };
+    executeConfirmedMove(move);
+
+    // Send to server with UCI format
+    const uciMove = `${from}${to}${promotion}`;
+    console.log(`📤 Sending promotion UCI to server: ${uciMove}`);
+
+    if (gameSocket && gameSocket.readyState === WebSocket.OPEN) {
+        gameSocket.send(JSON.stringify({
+            type: 'move',
+            gameId: gameState.gameId,
+            move: { from, to, promotion },
+            uci: uciMove,
+            timestamp: Date.now()
+        }));
+    }
+}
+
+/**
+ * Close promotion dialog
+ */
+function closePromotionDialog() {
+    const backdrop = document.getElementById('promotion-backdrop');
+    if (backdrop) {
+        backdrop.style.animation = 'fadeOut 0.2s ease-out';
+        setTimeout(() => {
+            if (backdrop.parentNode) {
+                document.body.removeChild(backdrop);
+            }
+        }, 200);
+    }
+
+    // Add fadeOut animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeOut {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 // Initialize the game when DOM is loaded
 document.addEventListener('DOMContentLoaded', initializeGame);
