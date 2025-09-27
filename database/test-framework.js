@@ -1,122 +1,136 @@
 // database/test-framework.js
-// Professional Unit Test Framework for Los Alamos Chess Database
-// Based on EPE321 Group Design Document Specifications
+// Custom Database Testing Framework for Los Alamos Chess
+// Provides transaction-based test isolation and comprehensive assertion library
+// Modified to work with tests in /database/tests/ and save reports in /database/test_reports
 
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
+/**
+ * Custom Database Testing Framework
+ * Provides isolated test execution with transaction rollback and detailed reporting
+ */
 class TestFramework {
     constructor() {
+        this.pool = null;
         this.tests = [];
         this.results = {
             passed: 0,
             failed: 0,
             errors: [],
-            details: []
+            details: [],
+            duration: 0,
+            coverage: 0
         };
-        this.pool = null;
     }
 
     /**
-     * Initialize test database connection
+     * Initialize the test framework with database connection
      */
     async initialize() {
+        // Load environment variables
         require('dotenv').config();
         
+        // Create database connection pool
         this.pool = new Pool({
             user: process.env.DB_USER || 'postgres',
             host: process.env.DB_HOST || 'localhost',
-            database: process.env.DB_NAME || 'los_alamos_chess',
+            database: process.env.DB_NAME || 'losalamos_chess',
             password: process.env.DB_PASSWORD,
-            port: parseInt(process.env.DB_PORT) || 5432,
-            max: 5 // Limit connections for testing
+            port: process.env.DB_PORT || 5432,
+            max: 5, // Maximum connections in pool for testing
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 5000
         });
 
-        // Test connection
+        // Test database connection
         try {
             const client = await this.pool.connect();
-            client.release();
             console.log('TEST FRAMEWORK: Database connection established');
+            client.release();
         } catch (error) {
             throw new Error(`Database connection failed: ${error.message}`);
         }
     }
 
     /**
-     * Register a test case
+     * Register a new test case
+     * @param {string} id - Unique test identifier (e.g., 'DB-01')
+     * @param {string} description - Human-readable test description
+     * @param {function} testFunction - Async function that performs the test
      */
-    addTest(testId, description, testFunction, preconditions = null) {
+    addTest(id, description, testFunction) {
         this.tests.push({
-            id: testId,
+            id,
             description,
-            testFunction,
-            preconditions
+            testFunction
         });
     }
 
     /**
-     * Execute all registered tests
+     * Execute all registered tests with transaction isolation
+     * Each test runs in its own transaction that is rolled back after completion
      */
     async runAllTests() {
+        console.log('Starting test execution...');
         console.log('========================================');
-        console.log('LOS ALAMOS CHESS - DATABASE UNIT TESTS');
-        console.log('========================================');
-        console.log(`Running ${this.tests.length} test cases...`);
-        console.log('');
-
+        
         const startTime = Date.now();
+        this.results = {
+            passed: 0,
+            failed: 0,
+            errors: [],
+            details: [],
+            duration: 0,
+            coverage: 0
+        };
 
         for (const test of this.tests) {
             await this.runSingleTest(test);
         }
 
         const endTime = Date.now();
-        const duration = endTime - startTime;
+        this.results.duration = endTime - startTime;
+        this.results.coverage = this.calculateCoverage();
 
-        this.printSummary(duration);
+        this.printSummary(this.results.duration);
+        
         return this.results;
     }
 
-   /**
-     * Run a single test case with improved error handling
+    /**
+     * Execute a single test case with proper isolation
      */
     async runSingleTest(test) {
-        let client = null;
+        console.log(`Running ${test.id}: ${test.description}`);
         
+        let client = null;
         try {
-            console.log(`[${test.id}] ${test.description}`);
-            
-            // Setup preconditions if specified
-            if (test.preconditions) {
-                console.log(`  Setting up preconditions...`);
-                await test.preconditions();
-            }
-
             client = await this.pool.connect();
-            
-            // For tests that expect constraint violations, don't use transactions
-            const expectsConstraintViolation = test.id === 'DB-02' || test.id === 'DB-08' || 
-                                   test.id === 'DB-09' || test.id === 'DB-11' || test.id === 'DB-14';
             
             let result;
             
-            if (expectsConstraintViolation) {
-                // Run without transaction for constraint-testing tests
-                result = await test.testFunction(client);
-            } else {
-                // Use transaction for other tests
+            // Run test in transaction for isolation
+            if (test.testFunction.length > 0) {
+                // Test expects a client parameter
                 await client.query('BEGIN');
                 try {
                     result = await test.testFunction(client);
-                    await client.query('ROLLBACK'); // Always rollback to keep tests isolated
-                } catch (error) {
+                    // Always rollback to keep tests isolated
                     await client.query('ROLLBACK');
+                } catch (error) {
+                    // Ensure rollback happens even on error
+                    try {
+                        await client.query('ROLLBACK');
+                    } catch (rollbackError) {
+                        console.log(`  WARNING: Rollback failed: ${rollbackError.message}`);
+                    }
                     throw error;
                 }
             }
             
-            if (result.success) {
+            if (result && result.success) {
                 console.log(`  PASS: ${result.message}`);
                 this.results.passed++;
                 this.results.details.push({
@@ -126,7 +140,7 @@ class TestFramework {
                     expected: result.expected,
                     actual: result.actual
                 });
-            } else {
+            } else if (result) {
                 console.log(`  FAIL: ${result.message}`);
                 this.results.failed++;
                 this.results.errors.push({
@@ -141,6 +155,18 @@ class TestFramework {
                     message: result.message,
                     expected: result.expected,
                     actual: result.actual
+                });
+            } else {
+                console.log(`  ERROR: Test returned no result`);
+                this.results.failed++;
+                this.results.errors.push({
+                    id: test.id,
+                    message: 'Test function returned no result'
+                });
+                this.results.details.push({
+                    id: test.id,
+                    status: 'ERROR',
+                    message: 'Test function returned no result'
                 });
             }
             
@@ -165,7 +191,7 @@ class TestFramework {
     }
 
     /**
-     * Print test results summary
+     * Print comprehensive test results summary
      */
     printSummary(duration) {
         console.log('');
@@ -202,7 +228,7 @@ class TestFramework {
     }
 
     /**
-     * Calculate estimated test coverage
+     * Calculate estimated test coverage based on requirements
      */
     calculateCoverage() {
         // Based on Group Design Document requirements
@@ -216,10 +242,14 @@ class TestFramework {
         const testedAreas = new Set();
         this.results.details.forEach(test => {
             if (test.status === 'PASS') {
+                // Map test IDs to coverage areas
                 if (test.id.includes('DB-01') || test.id.includes('DB-02')) testedAreas.add('user_creation');
                 if (test.id.includes('DB-03') || test.id.includes('DB-04')) testedAreas.add('game_creation');
                 if (test.id.includes('DB-05')) testedAreas.add('optimistic_locking');
                 if (test.id.includes('DB-07')) testedAreas.add('audit_logging');
+                if (test.id.includes('DB-08')) testedAreas.add('constraints');
+                if (test.id.includes('DB-10')) testedAreas.add('performance');
+                if (test.id.includes('DB-11') || test.id.includes('DB-12')) testedAreas.add('data_integrity');
                 // Add more mappings as needed
             }
         });
@@ -228,7 +258,7 @@ class TestFramework {
     }
 
     /**
-     * Cleanup resources
+     * Cleanup database connections and resources
      */
     async cleanup() {
         if (this.pool) {
@@ -238,9 +268,13 @@ class TestFramework {
     }
 
     /**
-     * Assert helper functions
+     * Static assertion helper functions for test validation
+     * Provides a comprehensive set of assertion methods for database testing
      */
     static assert = {
+        /**
+         * Assert that two values are equal
+         */
         equals: (actual, expected, message = '') => {
             if (actual === expected) {
                 return { success: true, message: `Assertion passed: ${message}`, expected, actual };
@@ -249,6 +283,9 @@ class TestFramework {
             }
         },
         
+        /**
+         * Assert that a value is not null or undefined
+         */
         notNull: (value, message = '') => {
             if (value !== null && value !== undefined) {
                 return { success: true, message: `Not null assertion passed: ${message}` };
@@ -257,6 +294,9 @@ class TestFramework {
             }
         },
         
+        /**
+         * Assert that an async function throws an expected error
+         */
         throws: async (asyncFunction, expectedError, message = '') => {
             try {
                 await asyncFunction();
@@ -270,6 +310,9 @@ class TestFramework {
             }
         },
         
+        /**
+         * Assert that a condition is true
+         */
         isTrue: (condition, message = '') => {
             if (condition === true) {
                 return { success: true, message: `Condition is true: ${message}` };
@@ -278,11 +321,47 @@ class TestFramework {
             }
         },
         
+        /**
+         * Assert that an array has the expected length
+         */
         arrayLength: (array, expectedLength, message = '') => {
             if (Array.isArray(array) && array.length === expectedLength) {
                 return { success: true, message: `Array length correct: ${message}` };
             } else {
                 return { success: false, message: `Array length incorrect: ${message}`, expected: expectedLength, actual: array ? array.length : 'not array' };
+            }
+        },
+
+        /**
+         * Assert that a value is within a numeric range
+         */
+        inRange: (value, min, max, message = '') => {
+            if (typeof value === 'number' && value >= min && value <= max) {
+                return { success: true, message: `Value in range: ${message}` };
+            } else {
+                return { success: false, message: `Value out of range: ${message}`, expected: `${min}-${max}`, actual: value };
+            }
+        },
+
+        /**
+         * Assert that a string contains expected substring
+         */
+        contains: (haystack, needle, message = '') => {
+            if (typeof haystack === 'string' && haystack.includes(needle)) {
+                return { success: true, message: `String contains expected value: ${message}` };
+            } else {
+                return { success: false, message: `String does not contain expected value: ${message}`, expected: needle, actual: haystack };
+            }
+        },
+
+        /**
+         * Assert that a value matches a regular expression
+         */
+        matches: (value, regex, message = '') => {
+            if (typeof value === 'string' && regex.test(value)) {
+                return { success: true, message: `Value matches pattern: ${message}` };
+            } else {
+                return { success: false, message: `Value does not match pattern: ${message}`, expected: regex.toString(), actual: value };
             }
         }
     };

@@ -2,12 +2,40 @@
 // database/run-tests.js
 // Main Test Runner for Los Alamos Chess Database Unit Tests
 // Professional test suite following Group Design Document specifications
+// Modified to save reports in /database/test_reports and work with tests in /database/tests/
 
 const fs = require('fs');
 const path = require('path');
 const TestFramework = require('./test-framework');
-const { registerCoreTests } = require('./tests/db-core-tests');
-const { registerAdvancedTests } = require('./tests/db-advanced-tests');
+
+// Try to import test registrations from the correct location
+let registerCoreTests, registerAdvancedTests;
+
+// Check if tests are in the tests/ subdirectory first, then fallback to current directory
+try {
+    const coreTestsPath = path.resolve(__dirname, 'tests', 'db-core-tests.js');
+    const advancedTestsPath = path.resolve(__dirname, 'tests', 'db-advanced-tests.js');
+    
+    if (fs.existsSync(coreTestsPath)) {
+        ({ registerCoreTests } = require('./tests/db-core-tests'));
+        console.log('Loaded core tests from /database/tests/');
+    } else {
+        ({ registerCoreTests } = require('./db-core-tests'));
+        console.log('Loaded core tests from /database/');
+    }
+    
+    if (fs.existsSync(advancedTestsPath)) {
+        ({ registerAdvancedTests } = require('./tests/db-advanced-tests'));
+        console.log('Loaded advanced tests from /database/tests/');
+    } else {
+        ({ registerAdvancedTests } = require('./db-advanced-tests'));
+        console.log('Loaded advanced tests from /database/');
+    }
+} catch (error) {
+    console.error('ERROR: Could not load test files:', error.message);
+    console.error('Make sure the test files exist in either /database/ or /database/tests/');
+    process.exit(1);
+}
 
 // ANSI color codes for better output formatting
 const colors = {
@@ -21,6 +49,9 @@ const colors = {
     cyan: '\x1b[36m'
 };
 
+/**
+ * Print application banner
+ */
 function printBanner() {
     console.log(colors.cyan + colors.bright);
     console.log('╔═══════════════════════════════════════════════════════════════╗');
@@ -33,6 +64,9 @@ function printBanner() {
     console.log(colors.reset);
 }
 
+/**
+ * Display environment information
+ */
 function printEnvironmentInfo() {
     console.log(colors.blue + 'ENVIRONMENT INFORMATION:' + colors.reset);
     console.log(`Node.js Version: ${process.version}`);
@@ -43,6 +77,9 @@ function printEnvironmentInfo() {
     console.log('');
 }
 
+/**
+ * Check system prerequisites before running tests
+ */
 function checkPrerequisites() {
     console.log(colors.yellow + 'CHECKING PREREQUISITES:' + colors.reset);
     
@@ -77,6 +114,10 @@ function checkPrerequisites() {
     console.log('');
 }
 
+/**
+ * Main database test execution function
+ * Sets up test framework, registers tests, and runs all test suites
+ */
 async function runDatabaseTests() {
     const framework = new TestFramework();
     
@@ -111,140 +152,175 @@ async function runDatabaseTests() {
     }
 }
 
+/**
+ * Generate comprehensive test report and save to test_reports directory
+ * Only keeps the latest report (overwrites previous one)
+ */
 async function generateTestReport(results) {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const reportPath = path.join(__dirname, `test-report-${timestamp}.md`);
+    // Always save reports to /database/test_reports regardless of where script is run from
+    const projectRoot = process.cwd();
+    const reportsDir = path.join(projectRoot, 'database', 'test_reports');
     
-    let report = '# Los Alamos Chess - Database Unit Test Report\n\n';
-    report += `**Generated:** ${new Date().toLocaleString()}\n`;
-    report += `**Total Tests:** ${results.passed + results.failed}\n`;
-    report += `**Passed:** ${results.passed}\n`;
-    report += `**Failed:** ${results.failed}\n`;
-    report += `**Success Rate:** ${((results.passed / (results.passed + results.failed)) * 100).toFixed(1)}%\n\n`;
+    if (!fs.existsSync(reportsDir)) {
+        fs.mkdirSync(reportsDir, { recursive: true });
+        console.log(`Created test_reports directory: ${reportsDir}`);
+    }
+
+    // Generate report filename - always the same to overwrite previous
+    const reportPath = path.join(reportsDir, 'latest-test-report.md');
     
-    // Requirements compliance check
-    report += '## Requirements Compliance\n\n';
-    report += 'Based on EPE321 Group Design Document Table 3:\n\n';
+    // Generate detailed markdown report
+    const reportContent = generateMarkdownReport(results);
     
-    const requirementMapping = {
-        'DB-01': 'User Creation with Password Hashing',
-        'DB-02': 'Duplicate Email Prevention',
-        'DB-03': 'Game Creation with Initial State',
-        'DB-04': 'Move Addition with Version Control',
-        'DB-05': 'Optimistic Locking (Version Conflicts)',
-        'DB-06': 'Game History with Ordering',
-        'DB-07': 'Audit Logging on Mutations'
-    };
+    try {
+        // Write report to file (overwrites previous)
+        fs.writeFileSync(reportPath, reportContent, 'utf8');
+        console.log('');
+        console.log(colors.green + '📊 TEST REPORT GENERATED:' + colors.reset);
+        console.log(`📄 Report saved: ${path.relative(process.cwd(), reportPath)}`);
+        console.log(`📈 Coverage: ${results.coverage || 'N/A'}%`);
+        console.log(`⏱️  Duration: ${results.duration || 'N/A'}ms`);
+        
+        // Also save a JSON version for potential API consumption
+        const jsonReportPath = path.join(reportsDir, 'latest-test-results.json');
+        fs.writeFileSync(jsonReportPath, JSON.stringify(results, null, 2), 'utf8');
+        console.log(`📋 JSON report: ${path.relative(process.cwd(), jsonReportPath)}`);
+        
+    } catch (error) {
+        console.error(colors.red + 'ERROR: Failed to write test report:' + colors.reset, error.message);
+        console.error('Report content will be displayed in console instead.');
+        console.log('\n' + reportContent);
+    }
+}
+
+/**
+ * Generate markdown formatted test report
+ */
+function generateMarkdownReport(results) {
+    const timestamp = new Date().toISOString();
+    const datePart = timestamp.split('T')[0];
+    const timePart = timestamp.split('T')[1].split('.')[0];
     
-    Object.entries(requirementMapping).forEach(([testId, description]) => {
-        const testResult = results.details.find(detail => detail.id === testId);
-        const status = testResult ? (testResult.status === 'PASS' ? '✅' : '❌') : '⚠️';
-        report += `- ${status} **${testId}:** ${description}\n`;
-    });
+    let report = `# Los Alamos Chess Database Test Report\n\n`;
+    report += `**Generated:** ${datePart} at ${timePart} UTC\n`;
+    report += `**Test Suite:** Database Unit Tests\n`;
+    report += `**Maintainer:** Arno Meyer (Database & Persistence)\n\n`;
     
-    report += '\n## Test Details\n\n';
-    results.details.forEach(detail => {
-        report += `### ${detail.id} - ${detail.status}\n`;
-        report += `**Message:** ${detail.message}\n`;
-        if (detail.expected && detail.actual) {
-            report += `**Expected:** ${JSON.stringify(detail.expected)}\n`;
-            report += `**Actual:** ${JSON.stringify(detail.actual)}\n`;
-        }
-        report += '\n';
-    });
+    // Summary Section
+    report += `## Test Summary\n\n`;
+    report += `| Metric | Value |\n`;
+    report += `|--------|-------|\n`;
+    report += `| **Total Tests** | ${results.passed + results.failed} |\n`;
+    report += `| **Passed** | ${results.passed} |\n`;
+    report += `| **Failed** | ${results.failed} |\n`;
+    report += `| **Success Rate** | ${((results.passed / (results.passed + results.failed)) * 100).toFixed(1)}% |\n`;
+    report += `| **Duration** | ${results.duration || 'N/A'}ms |\n`;
+    report += `| **Coverage** | ${results.coverage || 'N/A'}% |\n\n`;
     
-    if (results.failed > 0) {
-        report += '## Failed Tests Analysis\n\n';
-        results.errors.forEach(error => {
-            report += `### ${error.id}\n`;
-            report += `**Error:** ${error.message}\n`;
-            if (error.stack) {
-                report += '```\n' + error.stack + '\n```\n';
+    // Overall Status
+    const status = results.failed === 0 ? '✅ PASS' : '❌ FAIL';
+    const statusColor = results.failed === 0 ? 'green' : 'red';
+    report += `### Overall Status: ${status}\n\n`;
+    
+    if (results.failed === 0) {
+        report += `🎉 **All tests passed!** The database layer is ready for integration.\n\n`;
+    } else {
+        report += `⚠️ **${results.failed} test(s) failed.** Review required before integration.\n\n`;
+    }
+    
+    // Test Details Section
+    report += `## Test Details\n\n`;
+    
+    if (results.details && results.details.length > 0) {
+        results.details.forEach(test => {
+            const statusIcon = test.status === 'PASS' ? '✅' : test.status === 'FAIL' ? '❌' : '⚠️';
+            report += `### ${statusIcon} ${test.id}\n`;
+            report += `**Status:** ${test.status}\n`;
+            report += `**Message:** ${test.message}\n`;
+            
+            if (test.expected && test.actual) {
+                report += `**Expected:** \`${JSON.stringify(test.expected)}\`\n`;
+                report += `**Actual:** \`${JSON.stringify(test.actual)}\`\n`;
             }
-            report += '\n';
+            report += `\n`;
         });
     }
     
-    report += '## Recommendations\n\n';
-    if (results.failed === 0) {
-        report += '- ✅ All tests passed - Database is ready for team integration\n';
-        report += '- ✅ Ready for Byron\'s Rules Engine integration\n';
-        report += '- ✅ Ready for Elizabeth\'s Security layer\n';
-        report += '- ✅ Ready for Ethan\'s WebSocket integration\n';
-    } else {
-        report += '- ❌ Some tests failed - Review and fix issues before integration\n';
-        report += '- 🔧 Check database schema and constraints\n';
-        report += '- 🔧 Verify PostgreSQL configuration\n';
-        report += '- 🔧 Review error messages above for specific issues\n';
+    // Failed Tests Section (if any)
+    if (results.failed > 0 && results.errors) {
+        report += `## ❌ Failed Tests\n\n`;
+        results.errors.forEach(error => {
+            report += `### ${error.id}\n`;
+            report += `**Error:** ${error.message}\n`;
+            if (error.expected && error.actual) {
+                report += `**Expected:** \`${JSON.stringify(error.expected)}\`\n`;
+                report += `**Actual:** \`${JSON.stringify(error.actual)}\`\n`;
+            }
+            if (error.stack) {
+                report += `**Stack Trace:**\n\`\`\`\n${error.stack}\n\`\`\`\n`;
+            }
+            report += `\n`;
+        });
     }
     
-    try {
-        fs.writeFileSync(reportPath, report);
-        console.log(colors.cyan + `\nDETAILED REPORT GENERATED: ${reportPath}` + colors.reset);
-    } catch (error) {
-        console.log(colors.yellow + `Warning: Could not generate detailed report: ${error.message}` + colors.reset);
+    // Recommendations Section
+    report += `## 📋 Recommendations\n\n`;
+    if (results.failed === 0) {
+        report += `- ✅ Database layer is functioning correctly\n`;
+        report += `- ✅ Ready for integration with other components\n`;
+        report += `- ✅ All constraints and validations are working\n`;
+        report += `- 🔄 Continue with integration testing\n`;
+    } else {
+        report += `- ❌ Fix failing tests before integration\n`;
+        report += `- 🔍 Review error messages and stack traces\n`;
+        report += `- 🛠️ Check database schema and connections\n`;
+        report += `- 🔄 Re-run tests after fixes\n`;
     }
+    
+    report += `\n---\n`;
+    report += `*Generated by Los Alamos Chess Database Test Suite*\n`;
+    report += `*EPE321 Software Engineering - Group 14*\n`;
+    
+    return report;
 }
 
-function printUsageInfo() {
-    console.log(colors.blue + 'USAGE INFORMATION:' + colors.reset);
-    console.log('Run from project root:');
-    console.log('  node database/run-tests.js');
-    console.log('');
-    console.log('Or use npm script (add to package.json):');
-    console.log('  "scripts": { "test:db": "node database/run-tests.js" }');
-    console.log('  npm run test:db');
-    console.log('');
-    console.log(colors.blue + 'WINDOWS COMMANDS:' + colors.reset);
-    console.log('Command Prompt:');
-    console.log('  cd C:\\YourProject');
-    console.log('  node database\\run-tests.js');
-    console.log('');
-    console.log('PowerShell:');
-    console.log('  cd C:\\YourProject');
-    console.log('  node database/run-tests.js');
-    console.log('');
-}
-
-// Main execution
+/**
+ * Main execution function
+ */
 async function main() {
     printBanner();
     printEnvironmentInfo();
     checkPrerequisites();
-    printUsageInfo();
     
-    console.log(colors.bright + 'Starting database unit tests...' + colors.reset);
+    console.log(colors.bright + 'STARTING DATABASE TESTS...' + colors.reset);
     console.log('');
     
+    const startTime = Date.now();
     const exitCode = await runDatabaseTests();
+    const endTime = Date.now();
     
     console.log('');
+    console.log(colors.bright + `TESTS COMPLETED IN ${endTime - startTime}ms` + colors.reset);
+    
     if (exitCode === 0) {
-        console.log(colors.green + colors.bright + 'SUCCESS: All database tests completed successfully!' + colors.reset);
-        console.log('Database is ready for team integration.');
+        console.log(colors.green + '🎉 ALL TESTS PASSED! Database ready for integration.' + colors.reset);
     } else {
-        console.log(colors.red + colors.bright + 'FAILURE: Some database tests failed.' + colors.reset);
-        console.log('Please review the errors above and fix issues before proceeding.');
+        console.log(colors.red + '❌ SOME TESTS FAILED! Review required.' + colors.reset);
     }
     
     process.exit(exitCode);
 }
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-    console.error(colors.red + 'Unhandled promise rejection:' + colors.reset, reason);
-    process.exit(1);
-});
-
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-    console.error(colors.red + 'Uncaught exception:' + colors.reset, error);
-    process.exit(1);
-});
-
-// Run if this file is executed directly
+// Execute if run directly (not imported as module)
 if (require.main === module) {
-    main();
+    main().catch(error => {
+        console.error(colors.red + 'UNEXPECTED ERROR:' + colors.reset, error);
+        process.exit(1);
+    });
 }
 
-module.exports = { main, runDatabaseTests };
+module.exports = {
+    runDatabaseTests,
+    generateTestReport,
+    checkPrerequisites
+};

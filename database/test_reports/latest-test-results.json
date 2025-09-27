@@ -1,0 +1,84 @@
+{
+  "passed": 15,
+  "failed": 0,
+  "errors": [],
+  "details": [
+    {
+      "id": "DB-01",
+      "status": "PASS",
+      "message": "User created with properly hashed password"
+    },
+    {
+      "id": "DB-02",
+      "status": "PASS",
+      "message": "Duplicate email correctly rejected with constraint violation"
+    },
+    {
+      "id": "DB-03",
+      "status": "PASS",
+      "message": "Game created with correct initial state"
+    },
+    {
+      "id": "DB-04",
+      "status": "PASS",
+      "message": "Move added with correct version control"
+    },
+    {
+      "id": "DB-05",
+      "status": "PASS",
+      "message": "Optimistic locking working correctly"
+    },
+    {
+      "id": "DB-06",
+      "status": "PASS",
+      "message": "Game history retrieved correctly in order"
+    },
+    {
+      "id": "DB-07",
+      "status": "PASS",
+      "message": "Audit log created with correct metadata"
+    },
+    {
+      "id": "DB-08",
+      "status": "PASS",
+      "message": "Rating constraints working correctly"
+    },
+    {
+      "id": "DB-09",
+      "status": "PASS",
+      "message": "Move modification correctly prevented by database trigger"
+    },
+    {
+      "id": "DB-10",
+      "status": "PASS",
+      "message": "Performance test passed: 100 users created in 218ms"
+    },
+    {
+      "id": "DB-11",
+      "status": "PASS",
+      "message": "Foreign key constraint correctly prevented game creation with non-existent players"
+    },
+    {
+      "id": "DB-12",
+      "status": "PASS",
+      "message": "Index performance test passed: Email lookup completed in 0ms"
+    },
+    {
+      "id": "DB-13",
+      "status": "PASS",
+      "message": "Tournament system functioning correctly"
+    },
+    {
+      "id": "DB-14",
+      "status": "PASS",
+      "message": "Friendship system working correctly"
+    },
+    {
+      "id": "DB-15",
+      "status": "PASS",
+      "message": "Data consistency maintained under concurrent load"
+    }
+  ],
+  "duration": 3096,
+  "coverage": 64
+}
