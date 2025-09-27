@@ -18,6 +18,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const nodemailer = require('nodemailer');
+const EmailService = require('../src/services/EmailService');
 
 // Load security layer (which includes Byron's engine)
 let SecurityMoveValidator;
@@ -134,20 +135,23 @@ function generateResetCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Email configuration
-let emailTransporter = null;
-if (process.env.EMAIL_USER && process.env.EMAIL_PASSWORD) {
-    emailTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD
+// Email configuration with our EmailService
+const emailService = new EmailService();
+let emailInitialized = false;
+
+// Initialize email service
+(async () => {
+    try {
+        emailInitialized = await emailService.initialize();
+        if (emailInitialized) {
+            console.log('📧 Email service configured and ready');
+        } else {
+            console.log('📧 Email service not configured - using console output for demo');
         }
-    });
-    console.log('📧 Email transporter configured');
-} else {
-    console.log('📧 Email not configured - password reset will be disabled');
-}
+    } catch (error) {
+        console.log('📧 Email service initialization failed:', error.message);
+    }
+})();
 
 /**
  * WEBSOCKET GAME HANDLING WITH SECURITY INTEGRATION
@@ -1002,7 +1006,14 @@ app.post('/api/auth/password-reset', authLimiter, async (req, res) => {
             expiry: Date.now() + 10 * 60 * 1000
         });
 
-        console.log(`🔑 DEMO: Reset code for ${email}: ${resetCode}`);
+        // Send email with reset code using our EmailService
+        try {
+            await emailService.sendPasswordResetCode(email, resetCode, user.username);
+            console.log(`✅ Password reset code sent to ${email}`);
+        } catch (emailError) {
+            console.error('Email sending failed, showing code in console:', emailError.message);
+            console.log(`🔑 DEMO: Reset code for ${email}: ${resetCode}`);
+        }
 
         res.json({
             success: true,
@@ -1049,6 +1060,75 @@ app.post('/api/auth/verify-reset-code', async (req, res) => {
         res.status(500).json({
             error: 'VERIFICATION_ERROR',
             message: 'Failed to verify reset code'
+        });
+    }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+    try {
+        const { email, newPassword, resetToken } = req.body;
+
+        if (!email || !newPassword || !resetToken) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email, new password, and reset token are required'
+            });
+        }
+
+        // Validate password strength
+        if (newPassword.length < 8 ||
+            !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 8 characters with uppercase, lowercase, and number'
+            });
+        }
+
+        // Verify JWT token
+        let decoded;
+        try {
+            decoded = jwt.verify(resetToken, JWT_SECRET);
+            if (decoded.purpose !== 'password-reset') {
+                throw new Error('Invalid token purpose');
+            }
+        } catch (jwtError) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired reset token'
+            });
+        }
+
+        // Find user
+        const user = users.get(decoded.id);
+        if (!user || user.email !== email) {
+            return res.status(400).json({
+                success: false,
+                message: 'User not found or email mismatch'
+            });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+        // Update user password
+        user.password = hashedPassword;
+        users.set(user.id, user);
+
+        // Clear stored reset code
+        resetCodes.delete(email);
+
+        console.log(`✅ Password reset completed for ${email}`);
+
+        res.json({
+            success: true,
+            message: 'Password reset successfully'
+        });
+
+    } catch (error) {
+        console.error('❌ Password reset completion error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to reset password'
         });
     }
 });
@@ -1186,7 +1266,7 @@ server.listen(PORT, () => {
     console.log(`🌐 Server URL: http://${HOST}:${PORT}`);
     console.log(`📁 Static Files: ${path.join(__dirname, '../frontend')}`);
     console.log(`🔐 Authentication: JWT tokens configured`);
-    console.log(`📧 Email: ${emailTransporter ? 'Configured' : 'Not configured'}`);
+    console.log(`📧 Email: ${emailInitialized ? 'Configured' : 'Not configured'}`);
     console.log(`🛡️ Security: Rate limiting enabled`);
     console.log('');
     console.log('🎯 Available URLs:');
