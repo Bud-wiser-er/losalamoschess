@@ -324,6 +324,21 @@ function registerAdvancedTests(framework) {
         'Tournament system: Tournament creation and player enrollment',
         async (client) => {
             const timestamp = Date.now();
+            const passwordHash = await bcrypt.hash('password123', 12);
+
+            // First create a user to be the tournament creator (required for foreign key)
+            const creatorResult = await client.query(`
+                INSERT INTO users (username, email, password_hash, rating)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `, [
+                `tournamentcreator_${timestamp}`,
+                `tournamentcreator_${timestamp}@example.com`,
+                passwordHash,
+                1500
+            ]);
+
+            const creatorId = creatorResult.rows[0].id;
 
             // Create tournament
             const tournamentResult = await client.query(`
@@ -333,13 +348,12 @@ function registerAdvancedTests(framework) {
             `, [
                 `Test Tournament ${timestamp}`,
                 `Tournament for testing purposes - ${timestamp}`,
-                '00000000-0000-0000-0000-000000000001' // Placeholder created_by (would need real user in production)
+                creatorId // Use real user ID instead of fake UUID
             ]);
 
             const tournament = tournamentResult.rows[0];
 
             // Create test users for enrollment
-            const passwordHash = await bcrypt.hash('password123', 12);
             const players = [];
 
             for (let i = 0; i < 3; i++) {

@@ -1,21 +1,11 @@
 {
-  "passed": 12,
-  "failed": 3,
+  "passed": 15,
+  "failed": 1,
   "errors": [
     {
-      "id": "DB-04",
-      "message": "Test execution error: relation \"moves\" does not exist",
-      "stack": "error: relation \"moves\" does not exist\n    at C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\node_modules\\pg\\lib\\client.js:545:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-core-tests.js:246:32)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
-    },
-    {
       "id": "DB-06",
-      "message": "Test execution error: relation \"moves\" does not exist",
-      "stack": "error: relation \"moves\" does not exist\n    at C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\node_modules\\pg\\lib\\client.js:545:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-core-tests.js:390:17)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
-    },
-    {
-      "id": "DB-13",
-      "message": "Test execution error: insert or update on table \"tournament\" violates foreign key constraint \"tournament_created_by_fkey\"",
-      "stack": "error: insert or update on table \"tournament\" violates foreign key constraint \"tournament_created_by_fkey\"\n    at C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\node_modules\\pg\\lib\\client.js:545:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-advanced-tests.js:329:38)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
+      "message": "Test execution error: assertions is not defined",
+      "stack": "ReferenceError: assertions is not defined\n    at Object.testFunction (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\tests\\db-core-tests.js:452:37)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async TestFramework.runSingleTest (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:119:30)\n    at async TestFramework.runAllTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\test-framework.js:90:13)\n    at async runDatabaseTests (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:138:25)\n    at async main (C:\\Users\\arnom\\OneDrive\\Academic\\Y3S2\\EPE321\\2 - Project\\Git\\losalamoschess\\database\\run-tests.js:299:22)"
     }
   ],
   "details": [
@@ -36,8 +26,8 @@
     },
     {
       "id": "DB-04",
-      "status": "ERROR",
-      "message": "relation \"moves\" does not exist"
+      "status": "PASS",
+      "message": "Move added with correct version control"
     },
     {
       "id": "DB-05",
@@ -47,7 +37,7 @@
     {
       "id": "DB-06",
       "status": "ERROR",
-      "message": "relation \"moves\" does not exist"
+      "message": "assertions is not defined"
     },
     {
       "id": "DB-07",
@@ -81,8 +71,8 @@
     },
     {
       "id": "DB-13",
-      "status": "ERROR",
-      "message": "insert or update on table \"tournament\" violates foreign key constraint \"tournament_created_by_fkey\""
+      "status": "PASS",
+      "message": "Tournament system functioning correctly"
     },
     {
       "id": "DB-14",
@@ -93,8 +83,13 @@
       "id": "DB-15",
       "status": "PASS",
       "message": "Data consistency maintained under concurrent load"
+    },
+    {
+      "id": "DB-06",
+      "status": "PASS",
+      "message": "Game history retrieved correctly in order"
     }
   ],
-  "duration": 2894,
+  "duration": 3304,
   "coverage": 64
 }

@@ -12,7 +12,7 @@ try {
     TestFramework = require('../test-framework');
 } catch (error) {
     // Fallback to same directory (when file is in database/ root)
-    TestFramework = require('../test-framework');
+    TestFramework = require('./test-framework');
 }
 
 const bcrypt = require('bcrypt');
@@ -225,33 +225,29 @@ function registerCoreTests(framework) {
 
             const gameId = gameResult.rows[0].id;
 
-            // Add first move
+            // Add first move using game_move table structure
             const move1Data = {
                 gameId: gameId,
-                playerId: player1Id,
-                fromSquare: 'e2',
-                toSquare: 'e3',
-                piece: 'P',
-                moveNotation: 'e3',
-                fenAfter: 'rnqknr/pppppp/6/6/PPPP1P/RNQKPR w - - 0 2',
-                moveNumber: 1
+                ply: 1,
+                uci: 'e2e3',
+                san: 'e3',
+                prev_fen: 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1',
+                next_fen: 'rnqknr/pppppp/6/6/PPPP1P/RNQKPR w - - 0 2'
             };
 
             const moveQuery = `
-                INSERT INTO moves (game_id, player_id, from_square, to_square, piece, move_notation, fen_after, move_number)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id, game_id, move_number, created_at
+                INSERT INTO game_move (game_id, ply, by, uci, san, flags, prev_fen, next_fen)
+                VALUES ($1, $2, 'human', $3, $4, '{}', $5, $6)
+                RETURNING game_id, ply, created_at
             `;
 
             const moveResult = await client.query(moveQuery, [
                 move1Data.gameId,
-                move1Data.playerId,
-                move1Data.fromSquare,
-                move1Data.toSquare,
-                move1Data.piece,
-                move1Data.moveNotation,
-                move1Data.fenAfter,
-                move1Data.moveNumber
+                move1Data.ply,
+                move1Data.uci,
+                move1Data.san,
+                move1Data.prev_fen,
+                move1Data.next_fen
             ]);
 
             const move = moveResult.rows[0];
@@ -259,7 +255,7 @@ function registerCoreTests(framework) {
             // Update game version after move
             await client.query(`
                 UPDATE game SET version = version + 1, current_fen = $1 WHERE id = $2
-            `, [move1Data.fenAfter, gameId]);
+            `, [move1Data.next_fen, gameId]);
 
             // Verify game version was updated
             const updatedGameResult = await client.query(`
@@ -269,12 +265,12 @@ function registerCoreTests(framework) {
             const updatedGame = updatedGameResult.rows[0];
 
             const assertions = [
-                TestFramework.assert.notNull(move.id, 'Move ID should be generated'),
+                TestFramework.assert.notNull(move.game_id, 'Move should reference correct game'),
                 TestFramework.assert.equals(move.game_id, gameId, 'Move should reference correct game'),
-                TestFramework.assert.equals(move.move_number, 1, 'Move number should be correct'),
+                TestFramework.assert.equals(move.ply, 1, 'Move ply should be correct'),
                 TestFramework.assert.notNull(move.created_at, 'Move timestamp should be set'),
                 TestFramework.assert.equals(updatedGame.version, 2, 'Game version should increment after move'),
-                TestFramework.assert.equals(updatedGame.current_fen, move1Data.fenAfter, 'Game FEN should update after move')
+                TestFramework.assert.equals(updatedGame.current_fen, move1Data.next_fen, 'Game FEN should update after move')
             ];
 
             const failedAssertion = assertions.find(a => !a.success);
@@ -379,39 +375,79 @@ function registerCoreTests(framework) {
 
             const gameId = gameResult.rows[0].id;
 
-            // Add multiple moves
+    // DB-06: Game History Retrieval
+    framework.addTest(
+        'DB-06',
+        'Game history: Complete move history retrievable in correct order',
+        async (client) => {
+            // Create users and game
+            const passwordHash = await bcrypt.hash('password123', 12);
+            const timestamp = Date.now();
+            
+            const user1Result = await client.query(`
+                INSERT INTO users (username, email, password_hash, rating)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `, [`histplayer1_${timestamp}`, `histplayer1_${timestamp}@example.com`, passwordHash, 1200]);
+
+            const user2Result = await client.query(`
+                INSERT INTO users (username, email, password_hash, rating)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `, [`histplayer2_${timestamp}`, `histplayer2_${timestamp}@example.com`, passwordHash, 1300]);
+
+            const player1Id = user1Result.rows[0].id;
+            const player2Id = user2Result.rows[0].id;
+
+            const gameResult = await client.query(`
+                INSERT INTO game (variant, current_fen, status, white_player_id, black_player_id, version)
+                VALUES ('LOS_ALAMOS', 'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1', 'active', $1, $2, 1)
+                RETURNING id
+            `, [player1Id, player2Id]);
+
+            const gameId = gameResult.rows[0].id;
+
+            // Add multiple moves using game_move table structure
             const moves = [
-                { player: player1Id, from: 'e2', to: 'e3', notation: 'e3', number: 1 },
-                { player: player2Id, from: 'e5', to: 'e4', notation: 'e4', number: 2 },
-                { player: player1Id, from: 'f2', to: 'f3', notation: 'f3', number: 3 }
+                { ply: 1, uci: 'e2e3', san: 'e3' },
+                { ply: 2, uci: 'e5e4', san: 'e4' },
+                { ply: 3, uci: 'f2f3', san: 'f3' }
             ];
 
             for (const move of moves) {
                 await client.query(`
-                    INSERT INTO moves (game_id, player_id, from_square, to_square, piece, move_notation, move_number)
-                    VALUES ($1, $2, $3, $4, 'P', $5, $6)
-                `, [gameId, move.player, move.from, move.to, move.notation, move.number]);
+                    INSERT INTO game_move (game_id, ply, by, uci, san, flags, prev_fen, next_fen)
+                    VALUES ($1, $2, 'human', $3, $4, '{}', $5, $6)
+                `, [gameId, move.ply, move.uci, move.san, 
+                    'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1', // prev_fen (simplified for test)
+                    'rnqknr/pppppp/6/6/PPPPPP/RNQKNR w - - 0 1'  // next_fen (simplified for test)
+                ]);
             }
 
             // Retrieve game history
             const historyResult = await client.query(`
-                SELECT move_number, move_notation, from_square, to_square, player_id
-                FROM moves 
+                SELECT ply, san, uci
+                FROM game_move 
                 WHERE game_id = $1 
-                ORDER BY move_number ASC
+                ORDER BY ply ASC
             `, [gameId]);
 
             const history = historyResult.rows;
 
             const assertions = [
                 TestFramework.assert.arrayLength(history, 3, 'Should retrieve all 3 moves'),
-                TestFramework.assert.equals(history[0].move_number, 1, 'First move should have move_number 1'),
-                TestFramework.assert.equals(history[1].move_number, 2, 'Second move should have move_number 2'),
-                TestFramework.assert.equals(history[2].move_number, 3, 'Third move should have move_number 3'),
-                TestFramework.assert.equals(history[0].move_notation, 'e3', 'First move notation should be correct'),
-                TestFramework.assert.equals(history[1].move_notation, 'e4', 'Second move notation should be correct'),
-                TestFramework.assert.equals(history[2].move_notation, 'f3', 'Third move notation should be correct')
+                TestFramework.assert.equals(history[0].ply, 1, 'First move should have ply 1'),
+                TestFramework.assert.equals(history[1].ply, 2, 'Second move should have ply 2'),
+                TestFramework.assert.equals(history[2].ply, 3, 'Third move should have ply 3'),
+                TestFramework.assert.equals(history[0].san, 'e3', 'First move notation should be correct'),
+                TestFramework.assert.equals(history[1].san, 'e4', 'Second move notation should be correct'),
+                TestFramework.assert.equals(history[2].san, 'f3', 'Third move notation should be correct')
             ];
+
+            const failedAssertion = assertions.find(a => !a.success);
+            return failedAssertion || { success: true, message: 'Game history retrieved correctly in order' };
+        }
+    );
 
             const failedAssertion = assertions.find(a => !a.success);
             return failedAssertion || { success: true, message: 'Game history retrieved correctly in order' };

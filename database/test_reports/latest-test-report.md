@@ -1,6 +1,6 @@
 # Los Alamos Chess Database Test Report
 
-**Generated:** 2025-09-27 at 09:14:22 UTC
+**Generated:** 2025-09-27 at 09:20:15 UTC
 **Test Suite:** Database Unit Tests
 **Maintainer:** Arno Meyer (Database & Persistence)
 
@@ -8,16 +8,16 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Tests** | 15 |
-| **Passed** | 12 |
-| **Failed** | 3 |
-| **Success Rate** | 80.0% |
-| **Duration** | 2894ms |
+| **Total Tests** | 16 |
+| **Passed** | 15 |
+| **Failed** | 1 |
+| **Success Rate** | 93.8% |
+| **Duration** | 3304ms |
 | **Coverage** | 64% |
 
 ### Overall Status: ❌ FAIL
 
-⚠️ **3 test(s) failed.** Review required before integration.
+⚠️ **1 test(s) failed.** Review required before integration.
 
 ## Test Details
 
@@ -33,9 +33,9 @@
 **Status:** PASS
 **Message:** Game created with correct initial state
 
-### ⚠️ DB-04
-**Status:** ERROR
-**Message:** relation "moves" does not exist
+### ✅ DB-04
+**Status:** PASS
+**Message:** Move added with correct version control
 
 ### ✅ DB-05
 **Status:** PASS
@@ -43,7 +43,7 @@
 
 ### ⚠️ DB-06
 **Status:** ERROR
-**Message:** relation "moves" does not exist
+**Message:** assertions is not defined
 
 ### ✅ DB-07
 **Status:** PASS
@@ -69,9 +69,9 @@
 **Status:** PASS
 **Message:** Index performance test passed: Email lookup completed in 0ms
 
-### ⚠️ DB-13
-**Status:** ERROR
-**Message:** insert or update on table "tournament" violates foreign key constraint "tournament_created_by_fkey"
+### ✅ DB-13
+**Status:** PASS
+**Message:** Tournament system functioning correctly
 
 ### ✅ DB-14
 **Status:** PASS
@@ -81,44 +81,19 @@
 **Status:** PASS
 **Message:** Data consistency maintained under concurrent load
 
+### ✅ DB-06
+**Status:** PASS
+**Message:** Game history retrieved correctly in order
+
 ## ❌ Failed Tests
 
-### DB-04
-**Error:** Test execution error: relation "moves" does not exist
-**Stack Trace:**
-```
-error: relation "moves" does not exist
-    at C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\node_modules\pg\lib\client.js:545:17
-    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async Object.testFunction (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\tests\db-core-tests.js:246:32)
-    at async TestFramework.runSingleTest (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\test-framework.js:119:30)
-    at async TestFramework.runAllTests (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\test-framework.js:90:13)
-    at async runDatabaseTests (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\run-tests.js:138:25)
-    at async main (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\run-tests.js:299:22)
-```
-
 ### DB-06
-**Error:** Test execution error: relation "moves" does not exist
+**Error:** Test execution error: assertions is not defined
 **Stack Trace:**
 ```
-error: relation "moves" does not exist
-    at C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\node_modules\pg\lib\client.js:545:17
+ReferenceError: assertions is not defined
+    at Object.testFunction (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\tests\db-core-tests.js:452:37)
     at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async Object.testFunction (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\tests\db-core-tests.js:390:17)
-    at async TestFramework.runSingleTest (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\test-framework.js:119:30)
-    at async TestFramework.runAllTests (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\test-framework.js:90:13)
-    at async runDatabaseTests (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\run-tests.js:138:25)
-    at async main (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\run-tests.js:299:22)
-```
-
-### DB-13
-**Error:** Test execution error: insert or update on table "tournament" violates foreign key constraint "tournament_created_by_fkey"
-**Stack Trace:**
-```
-error: insert or update on table "tournament" violates foreign key constraint "tournament_created_by_fkey"
-    at C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\node_modules\pg\lib\client.js:545:17
-    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at async Object.testFunction (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\tests\db-advanced-tests.js:329:38)
     at async TestFramework.runSingleTest (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\test-framework.js:119:30)
     at async TestFramework.runAllTests (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\test-framework.js:90:13)
     at async runDatabaseTests (C:\Users\arnom\OneDrive\Academic\Y3S2\EPE321\2 - Project\Git\losalamoschess\database\run-tests.js:138:25)
