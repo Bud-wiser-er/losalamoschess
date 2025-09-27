@@ -1,73 +1,90 @@
-// database/test-connection.js
-// Tests PostgreSQL database connection and verifies schema setup
+/**
+ * Database Connection Test Utility
+ *
+ * Validates PostgreSQL database connectivity and verifies that the schema
+ * has been properly initialized. Provides diagnostic information for
+ * troubleshooting connection issues.
+ *
+ * Usage: node database/test-connection.js
+ */
+
 require('dotenv').config();
 const { Pool } = require('pg');
 
-// Create connection pool with fallback defaults
+/**
+ * Connection pool configured specifically for testing purposes
+ * Uses minimal connections and shorter timeouts for quick feedback
+ */
 const pool = new Pool({
   user: process.env.DB_USER || 'postgres',
   host: process.env.DB_HOST || 'localhost',
   database: process.env.DB_NAME || 'losalamos_chess',
   password: process.env.DB_PASSWORD,
   port: parseInt(process.env.DB_PORT) || 5432,
-  // Connection timeout and retry settings
+
+  // Testing-optimized connection settings
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 30000,
-  max: 1 // Only need 1 connection for testing
+  max: 1 // Single connection sufficient for testing
 });
 
+/**
+ * Execute database connection test with comprehensive diagnostics
+ *
+ * @returns {Promise<void>}
+ */
 async function testConnection() {
   let client = null;
-  
+
   try {
-    console.log('Testing database connection...');
-    console.log(`Connecting to: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}`);
+    console.log('Initiating database connection test...');
+    console.log(`Target: ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}`);
     console.log(`Database: ${process.env.DB_NAME || 'losalamos_chess'}`);
     console.log(`User: ${process.env.DB_USER || 'postgres'}`);
     console.log('');
 
-    // Get client from pool with timeout
+    // Establish database connection
     client = await pool.connect();
-    console.log('SUCCESS: Database connected successfully!');
-    
-    // Test basic query and get PostgreSQL version info
+    console.log('Database connection established successfully');
+
+    // Verify database functionality with basic query
     const result = await client.query('SELECT NOW() as current_time, version() as postgres_version');
     const currentTime = result.rows[0].current_time;
     const version = result.rows[0].postgres_version.split(' ')[0];
-    
-    console.log(`Current time: ${currentTime}`);
+
+    console.log(`Current server time: ${currentTime}`);
     console.log(`PostgreSQL version: ${version}`);
     console.log('');
 
-    // Check if database has required tables
+    // Verify schema installation by checking for tables
     const tablesResult = await client.query(`
-      SELECT table_name 
-      FROM information_schema.tables 
+      SELECT table_name
+      FROM information_schema.tables
       WHERE table_schema = 'public'
       ORDER BY table_name
     `);
-    
+
     if (tablesResult.rows.length > 0) {
-      console.log('Tables found in database:');
+      console.log('Schema verification - Tables found:');
       tablesResult.rows.forEach(row => {
-        console.log(`   - ${row.table_name}`);
+        console.log(`  - ${row.table_name}`);
       });
       console.log(`Total tables: ${tablesResult.rows.length}`);
     } else {
-      console.log('WARNING: No tables found in database');
-      console.log('You may need to run the schema setup:');
-      console.log('   node database/setup.js');
-      console.log('   or run: scripts\\db-reset.cmd');
+      console.log('WARNING: No tables detected in database');
+      console.log('Schema may not be initialized. Consider running:');
+      console.log('  node database/setup.js');
+      console.log('  npm run db:setup');
     }
-    
+
     console.log('');
-    console.log('SUCCESS: Database test completed successfully!');
-    console.log('Database is ready for use.');
-    
+    console.log('Database test completed successfully');
+    console.log('Database is operational and ready for use');
+
   } catch (error) {
-    console.error('ERROR: Database connection failed');
-    console.error(`Error code: ${error.code || 'UNKNOWN'}`);
-    console.error(`Error message: ${error.message}`);
+    console.error('Database connection test failed');
+    console.error(`Error type: ${error.code || 'UNKNOWN'}`);
+    console.error(`Details: ${error.message}`);
     console.log('');
     
     // Provide specific troubleshooting based on error type
