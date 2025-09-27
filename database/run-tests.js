@@ -9,13 +9,14 @@ const path = require('path');
 const TestFramework = require('./test-framework');
 
 // Try to import test registrations from the correct location
-let registerCoreTests, registerAdvancedTests;
+let registerCoreTests, registerAdvancedTests, registerSecurityLoadTests;
 
 // Check if tests are in the tests/ subdirectory first, then fallback to current directory
 try {
     const coreTestsPath = path.resolve(__dirname, 'tests', 'db-core-tests.js');
     const advancedTestsPath = path.resolve(__dirname, 'tests', 'db-advanced-tests.js');
-    
+    const securityLoadTestsPath = path.resolve(__dirname, 'tests', 'db-security-load-tests.js');
+
     if (fs.existsSync(coreTestsPath)) {
         ({ registerCoreTests } = require('./tests/db-core-tests'));
         console.log('Loaded core tests from /database/tests/');
@@ -23,13 +24,26 @@ try {
         ({ registerCoreTests } = require('./db-core-tests'));
         console.log('Loaded core tests from /database/');
     }
-    
+
     if (fs.existsSync(advancedTestsPath)) {
         ({ registerAdvancedTests } = require('./tests/db-advanced-tests'));
         console.log('Loaded advanced tests from /database/tests/');
     } else {
         ({ registerAdvancedTests } = require('./db-advanced-tests'));
         console.log('Loaded advanced tests from /database/');
+    }
+
+    if (fs.existsSync(securityLoadTestsPath)) {
+        ({ registerSecurityLoadTests } = require('./tests/db-security-load-tests'));
+        console.log('Loaded security and load tests from /database/tests/');
+    } else {
+        try {
+            ({ registerSecurityLoadTests } = require('./db-security-load-tests'));
+            console.log('Loaded security and load tests from /database/');
+        } catch (secError) {
+            console.log('Security and load tests not found (optional)');
+            registerSecurityLoadTests = null;
+        }
     }
 } catch (error) {
     console.error('ERROR: Could not load test files:', error.message);
@@ -130,7 +144,12 @@ async function runDatabaseTests() {
         console.log('Registering test suites...');
         registerCoreTests(framework);
         registerAdvancedTests(framework);
-        
+
+        // Register security and load tests if available
+        if (registerSecurityLoadTests) {
+            registerSecurityLoadTests(framework);
+        }
+
         console.log(`Registered ${framework.tests.length} test cases`);
         console.log('');
 
