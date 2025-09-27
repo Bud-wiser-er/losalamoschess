@@ -1,6 +1,6 @@
 # Los Alamos Chess Database Test Report
 
-**Generated:** 2025-09-27 at 12:18:51 UTC
+**Generated:** 2025-09-27 at 13:38:48 UTC
 **Test Suite:** Database Unit Tests
 **Maintainer:** Arno Meyer (Database & Persistence)
 
@@ -8,11 +8,11 @@
 
 | Metric | Value |
 |--------|-------|
-| **Total Tests** | 15 |
-| **Passed** | 15 |
+| **Total Tests** | 20 |
+| **Passed** | 20 |
 | **Failed** | 0 |
 | **Success Rate** | 100.0% |
-| **Duration** | 3101ms |
+| **Duration** | 47491ms |
 | **Coverage** | 64% |
 
 ### Overall Status: ✅ PASS
@@ -67,7 +67,7 @@
 
 ### ✅ DB-12
 **Status:** PASS
-**Message:** Index performance test passed: Email lookup completed in 0ms
+**Message:** Index performance test passed: Email lookup completed in 1ms
 
 ### ✅ DB-13
 **Status:** PASS
@@ -80,6 +80,26 @@
 ### ✅ DB-15
 **Status:** PASS
 **Message:** Data consistency maintained under concurrent load
+
+### ✅ SEC-01
+**Status:** PASS
+**Message:** SQL injection prevention working: 7/7 attacks blocked
+
+### ✅ SEC-02
+**Status:** PASS
+**Message:** Game search SQL injection prevention: 5/5 attacks neutralized
+
+### ✅ LOAD-01
+**Status:** PASS
+**Message:** Connection pool stress test passed: 25/25 connections in 16ms
+
+### ✅ LOAD-02
+**Status:** PASS
+**Message:** Concurrent game load test passed: 105 games with 105 moves created in 42508ms (2.5 games/sec)
+
+### ✅ LOAD-03
+**Status:** PASS
+**Message:** Query performance test passed: 200 queries in 26ms (avg: 12.6ms, max: 25ms, 7692.3 queries/sec)
 
 ## 📋 Recommendations
 

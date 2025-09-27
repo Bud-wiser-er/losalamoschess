@@ -1,5 +1,5 @@
 {
-  "passed": 15,
+  "passed": 20,
   "failed": 0,
   "errors": [],
   "details": [
@@ -61,7 +61,7 @@
     {
       "id": "DB-12",
       "status": "PASS",
-      "message": "Index performance test passed: Email lookup completed in 0ms"
+      "message": "Index performance test passed: Email lookup completed in 1ms"
     },
     {
       "id": "DB-13",
@@ -77,8 +77,33 @@
       "id": "DB-15",
       "status": "PASS",
       "message": "Data consistency maintained under concurrent load"
+    },
+    {
+      "id": "SEC-01",
+      "status": "PASS",
+      "message": "SQL injection prevention working: 7/7 attacks blocked"
+    },
+    {
+      "id": "SEC-02",
+      "status": "PASS",
+      "message": "Game search SQL injection prevention: 5/5 attacks neutralized"
+    },
+    {
+      "id": "LOAD-01",
+      "status": "PASS",
+      "message": "Connection pool stress test passed: 25/25 connections in 16ms"
+    },
+    {
+      "id": "LOAD-02",
+      "status": "PASS",
+      "message": "Concurrent game load test passed: 105 games with 105 moves created in 42508ms (2.5 games/sec)"
+    },
+    {
+      "id": "LOAD-03",
+      "status": "PASS",
+      "message": "Query performance test passed: 200 queries in 26ms (avg: 12.6ms, max: 25ms, 7692.3 queries/sec)"
     }
   ],
-  "duration": 3101,
+  "duration": 47491,
   "coverage": 64
 }
