@@ -12,6 +12,8 @@
 
 // Confirmation Modal
 let modalCallback = null;
+let timersPaused = false;
+let pausedTimers = { white: null, black: null };
 const modalOverlay = document.getElementById("modalOverlay");
 const modalTitle = document.getElementById("modalTitle");
 const modalMessage = document.getElementById("modalMessage");
@@ -19,6 +21,7 @@ const modalConfirm = document.getElementById("modalConfirm");
 const modalCancel = document.getElementById("modalCancel");
 
 function showModal(title, message, callback) {
+    pauseTimers();
     modalTitle.innerText = title;
     modalMessage.innerText = message;
     modalOverlay.style.display = "flex";
@@ -27,7 +30,115 @@ function showModal(title, message, callback) {
 
 function closeModal(confirmed) {
     modalOverlay.style.display = "none";
+    if (!confirmed) {
+        resumeTimers();
+    }
     if (modalCallback) modalCallback(confirmed);
+}
+
+// Timer pause/resume functions
+function pauseTimers() {
+    if (timersPaused) return;
+
+    timersPaused = true;
+    pausedTimers.white = gameTimers.whiteInterval;
+    pausedTimers.black = gameTimers.blackInterval;
+
+    clearInterval(gameTimers.whiteInterval);
+    clearInterval(gameTimers.blackInterval);
+    gameTimers.whiteInterval = null;
+    gameTimers.blackInterval = null;
+
+    console.log('⏸️ Timers paused');
+}
+
+function resumeTimers() {
+    if (!timersPaused) return;
+
+    timersPaused = false;
+    gameTimers.lastUpdate = Date.now();
+
+    // Resume the current player's timer
+    if (gameState.isGameActive && !gameState.gameOver) {
+        startTimer(gameState.currentPlayer);
+    }
+
+    console.log('▶️ Timers resumed');
+}
+
+// Get player usernames from the UI
+function getPlayerUsernames() {
+    const playerName = document.querySelector('#player-card .player-name')?.textContent || 'Player';
+    const opponentName = document.querySelector('#opponent-card .player-name')?.textContent || 'AI Level 2';
+    return { playerName, opponentName };
+}
+
+// Show game result popup
+function showGameResultPopup(result, callback) {
+    const { playerName, opponentName } = getPlayerUsernames();
+
+    // Create result modal
+    const resultModal = document.createElement('div');
+    resultModal.className = 'modal-overlay';
+    resultModal.style.cssText = `
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 2001;
+    `;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.cssText = `
+        background: #1a1a1a;
+        padding: 30px;
+        border-radius: 12px;
+        width: 350px;
+        max-width: 90%;
+        text-align: center;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        animation: fadeInUp 0.25s ease;
+    `;
+
+    modal.innerHTML = `
+        <h2 style="color: white; margin-bottom: 20px;">Game Result</h2>
+        <div style="color: #ccc; margin-bottom: 20px; font-size: 18px;">
+            <div style="margin-bottom: 10px;">${playerName} vs ${opponentName}</div>
+            <div style="font-size: 24px; font-weight: bold; color: #10b981;">${result}</div>
+        </div>
+        <button id="resultOkBtn" style="
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.2s;
+        ">OK</button>
+    `;
+
+    resultModal.appendChild(modal);
+    document.body.appendChild(resultModal);
+
+    // Handle OK button click
+    const okBtn = modal.querySelector('#resultOkBtn');
+    okBtn.addEventListener('click', () => {
+        document.body.removeChild(resultModal);
+        if (callback) callback();
+    });
+
+    // Add hover effect
+    okBtn.addEventListener('mouseenter', () => {
+        okBtn.style.transform = 'scale(1.05)';
+    });
+    okBtn.addEventListener('mouseleave', () => {
+        okBtn.style.transform = 'scale(1)';
+    });
 }
 
 // Button handlers
@@ -794,7 +905,7 @@ function loadBotConfiguration() {
 function setupEventListeners() {
     const chatInput = document.getElementById('chat-input');
     const chatSend = document.querySelector('.chat-send');
-    
+
     if (chatInput) {
         chatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -802,9 +913,31 @@ function setupEventListeners() {
             }
         });
     }
-    
+
     if (chatSend) {
         chatSend.addEventListener('click', sendChatMessage);
+    }
+
+    // Setup game control button listeners
+    const backBtn = document.getElementById('back-btn');
+    const offerDrawBtn = document.getElementById('offer-draw-btn');
+    const resignBtn = document.getElementById('resign-btn');
+    const newGameBtn = document.getElementById('new-game-btn');
+
+    if (backBtn) {
+        backBtn.addEventListener('click', goBack);
+    }
+
+    if (offerDrawBtn) {
+        offerDrawBtn.addEventListener('click', offerDraw);
+    }
+
+    if (resignBtn) {
+        resignBtn.addEventListener('click', resign);
+    }
+
+    if (newGameBtn) {
+        newGameBtn.addEventListener('click', newGame);
     }
 }
 
@@ -1258,41 +1391,63 @@ function getAllLegalMovesForColor(color) {
     return moves;
 }
 
-// Global functions for HTML onclick handlers
-window.goBack = function() {
-    showModal("Leave Game?", "Are you sure you want to return to the lobby?", (ok) => {
-        if (ok) {
-            alert('You have left the game. Game over.');
-            window.location.href = "dashboard_page.html";
-        }
-    });
-};
+// Game control functions
+function goBack() {
+    // Check if game is still running
+    const isGameRunning = gameState.isGameActive && !gameState.gameOver;
 
-window.offerDraw = function() {
+    if (isGameRunning) {
+        showModal("Leave Game?", "Are you sure you want to return to the lobby? You are in the middle of a game!", (ok) => {
+            if (ok) {
+                // Stop timers
+                clearInterval(gameTimers.whiteInterval);
+                clearInterval(gameTimers.blackInterval);
+                // Redirect to lobby without error alert
+                window.location.href = "dashboard_page.html";
+            }
+        });
+    } else {
+        // Game is over, go directly to lobby
+        window.location.href = "dashboard_page.html";
+    }
+}
+
+function offerDraw() {
     showModal("Offer Draw?", "Are you sure you want to offer a draw?", (ok) => {
         if (ok) {
-            alert('You have offered a draw. Game over.');
-            window.location.href = "dashboard_page.html";
+            // Stop timers
+            clearInterval(gameTimers.whiteInterval);
+            clearInterval(gameTimers.blackInterval);
+
+            // Show result popup with 0-0 (draw)
+            showGameResultPopup("0-0", () => {
+                window.location.href = "dashboard_page.html";
+            });
         }
     });
-};
+}
 
-window.resign = function() {
+function resign() {
     showModal("Resign?", "Are you sure you want to resign?", (ok) => {
         if (ok) {
-            alert('You have resigned. Game over.');
+            // Stop timers
+            clearInterval(gameTimers.whiteInterval);
+            clearInterval(gameTimers.blackInterval);
 
             const gameStatusElement = document.getElementById('game-status');
             if (gameStatusElement) {
                 gameStatusElement.textContent = 'Game ended - Resigned';
             }
 
-            window.location.href = "dashboard_page.html";
+            // Show result popup with 1-0 (opponent wins)
+            showGameResultPopup("1-0", () => {
+                window.location.href = "dashboard_page.html";
+            });
         }
     });
-};
+}
 
-window.newGame = function() {
+function newGame() {
     showModal("New Game?", "Are you sure you want to start a new game?", (ok) => {
         if (ok) {
             gameState.board = { ...INITIAL_POSITION };
