@@ -45,7 +45,11 @@
     "validate": "node -e \"console.log('Environment validation complete')\"",
     "health": "npm run db:test && echo Health check passed",
     "setup": "npm install && npm run db:setup && npm run test:db",
-    "install-deps": "npm install"
+    "install-deps": "npm install",
+    "test:frontend": "playwright test --config=./frontend/playwright.config.js",
+    "test:frontend:ui": "playwright test --ui",
+    "test:frontend:headed": "playwright test --headed",
+    "test:all": "npm run test && npm run test:frontend"
   },
   "keywords": [
     "chess",
@@ -80,7 +84,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/losalamos-chess-backend.git"
+    "url": "git+https://github.com/your-username/losalamos-chess-backend.git"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
@@ -103,6 +107,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.55.1",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.3.1",
     "eslint": "^8.57.1",
@@ -141,5 +146,9 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/losalamos-chess-backend/issues"
+  },
+  "homepage": "https://github.com/your-username/losalamos-chess-backend#readme"
 }
